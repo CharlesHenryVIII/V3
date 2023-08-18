@@ -1,0 +1,6 @@
+[submodule "contrib/tracy-master"]
+	path = contrib/tracy-master
+	url = https://github.com/wolfpld/tracy
+[submodule "contrib/ImGui"]
+	path = contrib/ImGui
+	url = https://github.com/ocornut/imgui

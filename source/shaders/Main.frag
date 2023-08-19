@@ -1,4 +1,4 @@
-#version 330
+#version 460
 uniform sampler2D sampler;
 
 //uniform float u_time = 0;
@@ -21,4 +21,5 @@ void main()
 
     color.xyz = c;
     color.a = 1.0;
+    //color.xyz = f_normal;
 }

@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
 
 #if 1
     // GL 3.0 + GLSL 130
-    const char* glsl_version = "#version 130";
+    const char* glsl_version = "#version 460";
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
@@ -100,94 +100,41 @@ int main(int argc, char* argv[])
     stbi_set_flip_vertically_on_load(true);
     unsigned char* data = stbi_load("Grass_Block_Jumper.png", &x, &y, &n, 4);
 
-    float tf = 1.0f;
-    float te = 0.0f;
-#if 1
     float p = 0.5f;
-    float np = 0.0f;
-    float nn = 1.0f;
     Vertex vertices[] = {
-        { {  p,  p,  p }, { te, tf }, {  nn,  np,  np } }, // +x
-        { {  p, -p,  p }, { te, te }, {  nn,  np,  np } },
-        { {  p,  p, -p }, { tf, tf }, {  nn,  np,  np } },
-        { {  p, -p, -p }, { tf, te }, {  nn,  np,  np } },
+      // |   Position    |      UV       |         Normal        |
+        { {  p,  p,  p }, { 0.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } }, // +x
+        { {  p, -p,  p }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+        { {  p,  p, -p }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
+        { {  p, -p, -p }, { 1.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+
+        { { -p,  p, -p }, { 0.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } }, // -x
+        { { -p, -p, -p }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+        { { -p,  p,  p }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
+        { { -p, -p,  p }, { 1.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
             
-        { { -p,  p, -p }, { te, tf }, { -nn,  np,  np } }, // -x
-        { { -p, -p, -p }, { te, te }, { -nn,  np,  np } },
-        { { -p,  p,  p }, { tf, tf }, { -nn,  np,  np } },
-        { { -p, -p,  p }, { tf, te }, { -nn,  np,  np } },
+        { {  p,  p,  p }, { 0.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } }, // +y
+        { {  p,  p, -p }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+        { { -p,  p,  p }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
+        { { -p,  p, -p }, { 1.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
             
-        { {  p,  p,  p }, { te, tf }, {  np,  nn,  np } }, // +y
-        { {  p,  p, -p }, { te, te }, {  np,  nn,  np } },
-        { { -p,  p,  p }, { tf, tf }, {  np,  nn,  np } },
-        { { -p,  p, -p }, { tf, te }, {  np,  nn,  np } },
+        { { -p, -p,  p }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y 
+        { { -p, -p, -p }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+        { {  p, -p,  p }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
+        { {  p, -p, -p }, { 1.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
             
-        { { -p, -p,  p }, { te, tf }, {  np, -nn,  np } }, // -y 
-        { { -p, -p, -p }, { te, te }, {  np, -nn,  np } },
-        { {  p, -p,  p }, { tf, tf }, {  np, -nn,  np } },
-        { {  p, -p, -p }, { tf, te }, {  np, -nn,  np } },
+        { { -p,  p,  p }, { 0.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } }, // +z
+        { { -p, -p,  p }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+        { {  p,  p,  p }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
+        { {  p, -p,  p }, { 1.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
             
-        { { -p,  p,  p }, { te, tf }, {  np,  np,  nn } }, // +z
-        { { -p, -p,  p }, { te, te }, {  np,  np,  nn } },
-        { {  p,  p,  p }, { tf, tf }, {  np,  np,  nn } },
-        { {  p, -p,  p }, { tf, te }, {  np,  np,  nn } },
-            
-        { {  p,  p, -p }, { te, tf }, {  np,  np, -nn } }, // -z
-        { {  p, -p, -p }, { te, te }, {  np,  np, -nn } },
-        { { -p,  p, -p }, { tf, tf }, {  np,  np, -nn } },
-        { { -p, -p, -p }, { tf, te }, {  np,  np, -nn } },
+        { {  p,  p, -p }, { 0.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } }, // -z
+        { {  p, -p, -p }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+        { { -p,  p, -p }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
+        { { -p, -p, -p }, { 1.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
     };
-#else
-    float p = 1.0f;
-    Vertex vertices[] = {
-        { { -p, -p,  p }, { te, tf }, { -1.0f,  0.0f,  0.0f } }, // -x
-        { { -p, -p, -p }, { te, te }, { -1.0f,  0.0f,  0.0f } },
-        { { -p,  p,  p }, { tf, tf }, { -1.0f,  0.0f,  0.0f } },
-        { { -p,  p, -p }, { tf, te }, { -1.0f,  0.0f,  0.0f } },
-
-        { {  p, -p,  p }, { te, tf }, {  1.0f,  0.0f,  0.0f } }, // +x
-        { {  p, -p, -p }, { te, te }, {  1.0f,  0.0f,  0.0f } },
-        { {  p,  p,  p }, { tf, tf }, {  1.0f,  0.0f,  0.0f } },
-        { {  p,  p, -p }, { tf, te }, {  1.0f,  0.0f,  0.0f } },
-
-        { { -p, -p,  p }, { te, tf }, {  0.0f, -1.0f,  0.0f } }, // -y
-        { { -p, -p, -p }, { te, te }, {  0.0f, -1.0f,  0.0f } },
-        { {  p, -p,  p }, { tf, tf }, {  0.0f, -1.0f,  0.0f } },
-        { {  p, -p, -p }, { tf, te }, {  0.0f, -1.0f,  0.0f } },
-
-        { { -p,  p,  p }, { te, tf }, {  0.0f,  1.0f,  0.0f } }, // +y 
-        { { -p,  p, -p }, { te, te }, {  0.0f,  1.0f,  0.0f } },
-        { {  p,  p,  p }, { tf, tf }, {  0.0f,  1.0f,  0.0f } },
-        { {  p,  p, -p }, { tf, te }, {  0.0f,  1.0f,  0.0f } },
-
-        { { -p,  p, -p }, { te, tf }, {  0.0f,  0.0f, -1.0f } }, // -z
-        { { -p, -p, -p }, { te, te }, {  0.0f,  0.0f, -1.0f } },
-        { {  p,  p, -p }, { tf, tf }, {  0.0f,  0.0f, -1.0f } },
-        { {  p, -p, -p }, { tf, te }, {  0.0f,  0.0f, -1.0f } },
-
-        { { -p,  p,  p }, { te, tf }, {  0.0f,  0.0f,  1.0f } }, // z
-        { { -p, -p,  p }, { te, te }, {  0.0f,  0.0f,  1.0f } },
-        { {  p,  p,  p }, { tf, tf }, {  0.0f,  0.0f,  1.0f } },
-        { {  p, -p,  p }, { tf, te }, {  0.0f,  0.0f,  1.0f } },
-    };
-#endif
     static_assert(arrsize(vertices) == 24, "");
 
-#if 0
-    for (int i = 0; i < arrsize(vertices); i += 4)
-    {
-        int base = i * 4;
-        gbVec3 a = vertices3D[base + 1].p - vertices3D[base + 0].p;
-        gbVec3 b = vertices3D[base + 2].p - vertices3D[base + 0].p;
-        gbVec3 c;
-        gb_vec3_cross(&c, a, b);
-        gb_vec3_norm(&c, c);
-        vertices3D[base + 0].n = c;
-        vertices3D[base + 1].n = c;
-        vertices3D[base + 2].n = c;
-        vertices3D[base + 3].n = c;
-    }
-#endif
 
     GLuint vertex_buffer;
     glGenBuffers(1, &vertex_buffer);
@@ -212,24 +159,12 @@ int main(int argc, char* argv[])
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices3D), indices3D, GL_STATIC_DRAW);
 
-    //GLuint texture;
-    //glGenTextures(1, &texture);
-    //glBindTexture(GL_TEXTURE_2D, texture);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-    //GLuint program = CreateShaderProgram(VertShader3D, PixShader);
     g_renderer.programs[+Shader::Main]->UseShader();
 
-    Vec4 camera_pos = { 0,  2, -2,  1 };
-    //Vec4 camera_rot = { 0,  0,  0,  0 };
+    Vec3 camera_pos = { 0,  2, -2 };
     float camera_yaw = 0.0f;
     float camera_pitch = 0.0f;
 
-    //glUseProgram(program);
 
     while (g_running)
     {
@@ -244,17 +179,19 @@ int main(int argc, char* argv[])
 
             //NOTE(CSH): Force the game to run at 1fps
             //WARNING(CSH): BUGGY
-            //float delta_time_accumulator = 0;
-            //delta_time_accumulator += deltaTime;
-            //float desired_frame_time = 1.0f;
-            //if (delta_time_accumulator < desired_frame_time)
-            //{
-            //    float sleep_time_s = desired_frame_time - deltaTime;
-            //    Sleep_Thread(i64(sleep_time_s * 1000));
-            //}
-            //totalTime = SDL_GetPerformanceCounter() / freq - startTime;
-            //deltaTime = float(totalTime - previousTime);// / 10;
-            //previousTime = totalTime;
+#if 0
+            float delta_time_accumulator = 0;
+            delta_time_accumulator += deltaTime;
+            float desired_frame_time = 1.0f;
+            if (delta_time_accumulator < desired_frame_time)
+            {
+                float sleep_time_s = desired_frame_time - deltaTime;
+                Sleep_Thread(i64(sleep_time_s * 1000));
+            }
+            totalTime = SDL_GetPerformanceCounter() / freq - startTime;
+            deltaTime = float(totalTime - previousTime);// / 10;
+            previousTime = totalTime;
+#endif
 
             /*********************
              *
@@ -390,21 +327,38 @@ int main(int argc, char* argv[])
                 }
             }
 
+            /**********************************************
+             *
+             * Camera Position
+             *
+             ***************/
+
             if (playerInput.keyStates[SDL_BUTTON_MIDDLE].down)
             {
                 camera_yaw -= ((float(playerInput.mouse.pDelta.x) / float(g_renderer.size.x)) * (tau));
                 camera_pitch += ((float(playerInput.mouse.pDelta.y) / float(g_renderer.size.y)) * (tau));
+                float quater_pi = pi / 4;
+                float offset = 0.1f;
+                camera_pitch = Clamp(camera_pitch, (-quater_pi) * 3 + offset, quater_pi - offset);
             }
+            camera_pos.y = Max(+1.0f, camera_pos.y - playerInput.mouse.wheelInstant.y / 4);
+            camera_pos.z = Min(-1.0f, camera_pos.z + playerInput.mouse.wheelInstant.y / 4);
 
             Mat4 camera_world_matrix;
             Mat4 trans;
             Mat4 rot;
             gb_mat4_identity(&camera_world_matrix);
-            //gb_mat4_from_quat(&rot, m_transform.m_quat);
             gb_mat4_from_quat(&rot, gb_quat_euler_angles(camera_pitch, camera_yaw, 0.0f));
-            gb_mat4_translate(&trans, camera_pos.xyz);
+            gb_mat4_translate(&trans, camera_pos);
             camera_world_matrix = rot * trans;//trans * rot;
             Vec3 camera_pos_world = camera_world_matrix.col[3].xyz;
+
+            gbMat4 perspective;
+            gb_mat4_perspective(&perspective, 3.14f / 2, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
+            gbMat4 view;
+            gb_mat4_look_at(&view, camera_pos_world, {}, { 0,1,0 });
+
+
 
             if (showIMGUI)
             {
@@ -441,10 +395,10 @@ int main(int argc, char* argv[])
                             ImGui::TableSetupColumn("Z");
                             ImGui::TableHeadersRow();
 
-                            GenericImGuiTable("Camera_pos  ", "%+08.2f", camera_pos.e, 3);
-                            GenericImGuiTable("Camera_world", "%+08.2f", camera_pos_world.e, 3);
-                            //GenericImGuiTable("Yaw", "%+06.4f", &camera_yaw, 1);
-                            //GenericImGuiTable("Chunk", "%i", ToChunk(player->m_transform.m_p).p.e);
+                            GenericImGuiTable("Camera_pos",     "%+08.2f", camera_pos.e);
+                            GenericImGuiTable("Camera_world",   "%+08.2f", camera_pos_world.e);
+                            GenericImGuiTable("Camera_yaw",     "%+08.2f", &camera_yaw,     1);
+                            GenericImGuiTable("Camera_pitch",   "%+08.2f", &camera_pitch,   1);
 
                             ImGui::EndTable();
                         }
@@ -453,93 +407,11 @@ int main(int argc, char* argv[])
                 }
             }
 
-#if 1
-            //DebugPrint("playerInput.x = %+04i\n", playerInput.mouse.pDelta.x);
-            //NOTE: orignal from OpenGL testing
-            //Mat4 rotate;
-            //gb_mat4_rotate(&rotate, { 0,1,0 }, (float(playerInput.mouse.pDelta.x) / float(g_renderer.size.x))* tau);
-            //Mat4 translate;
-            //gb_mat4_translate(&translate, {});
-            //Mat4 result = translate * rotate;
-            
-            //playerInput.mouse.wheelInstant.y //positive zoom in, negative zoom out
-                            //Mat4 Entity::GetWorldMatrix() const
-                            //{
-                            //    Mat4 result;
-                            //    Mat4 trans;
-                            //    Mat4 rot;
-                            //    gb_mat4_identity(&result);
-                            //    //gb_mat4_from_quat(&rot, m_transform.m_quat);
-                            //    gb_mat4_from_quat(&rot, gb_quat_euler_angles(DegToRad(m_transform.m_pitch), DegToRad(m_transform.m_yaw), 0.0f));
-                            //    gb_mat4_translate(&trans, m_transform.m_p.p);
-                            //    result = trans * rot;
-                            //
-                            //    if (m_parent)
-                            //    {
-                            //        Entity* e = g_entityList.GetEntity(m_parent);
-                            //        if (e)
-                            //        {
-                            //            //result = e->GetWorldMatrix() * result;
-                            //            result = e->GetWorldMatrix() * result;
-                            //        }
-                            //    }
-                            //    return result;
-                            //}
-
-        //sp->UpdateUniformMat4("u_perspective", 1, false, playerCamera->m_perspective.e);
-        //sp->UpdateUniformMat4("u_view", 1, false, playerCamera->m_view.e);
-
-            //Mat4 translate;
-            //gb_mat4_translate(&translate, camera_pos.xyz);
-            ///Mat4 rotate_yaw;
-            ///gb_mat4_rotate(&rotate_yaw, { 0,1,0 }, camera_yaw);
-            /////Mat4 rotate_pitch;
-            /////gb_mat4_rotate(&rotate_pitch, { 0,1,0 }, camera_pitch);
-            ///Mat4 camera_mat = rotate_yaw /** rotate_pitch*/ * translate;
-            /////camera_mat * camera_pos;
-
-            gbMat4 perspective;
-            gb_mat4_perspective(&perspective, 3.14f / 2, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
-            gbMat4 view;
-            gb_mat4_look_at(&view, camera_pos_world, {}, { 0,1,0 });
-
-#else
-
-            Vec3 lookTarget = {};
-            WorldPos cameraRealWorldPosition = playerCamera->GetWorldPosition();
-            lookTarget = cameraRealWorldPosition.p + playerCamera->GetForwardVector();
-            gb_mat4_look_at(&playerCamera->m_view, cameraRealWorldPosition.p, lookTarget, playerCamera->m_up);
-
-            //Near Clip and Far Clip
-            gb_mat4_perspective(&playerCamera->m_perspective, 3.14f / 2, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
-            playerCamera->m_viewProj = playerCamera->m_perspective * playerCamera->m_view;
-#endif
-
-
-
-            //Debug Checks
-#if 0
-            {
-                WorldPos cubePosition;
-                cubePosition.p = { -125, 200, 0 };
-                AddCubeToRender(cubePosition, White, 1);
-                cubePosition.p.y -= 1;
-                AddCubeToRender(cubePosition, Blue, 0.5f);
-                cubePosition.p.y -= 1;
-                AddCubeToRender(cubePosition, Orange, 0.25f);
-            }
-#endif
-
-
-
 
             RenderUpdate(g_renderer.size, deltaTime);
 
             glClearDepth(1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            ////SKYBOX
-            //RenderSkybox(playerCamera);
 
             {
                 glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
@@ -557,25 +429,8 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 2);
                 glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, n));
 
-                //gbMat4 perspective;
-                //int w, h;
-                //SDL_GetWindowSize(window, &w, &h);
-                //gb_mat4_perspective(&perspective, 3.14f / 2, float(w) / h, 0.65f, 1000.0f);
-                //gbMat4 view;
-                //gb_mat4_look_at(&view, { 2, 2, 2 }, {}, { 0,1,0 });
-
-                //GLint loc;
                 g_renderer.programs[+Shader::Main]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
-                //loc = glGetUniformLocation(dc.program, "u_perspective");
-                //glUniformMatrix4fv(loc, 1, false, perspective.e);
                 g_renderer.programs[+Shader::Main]->UpdateUniformMat4("u_view", 1, false, view.e);
-                //loc = glGetUniformLocation(dc.program, "u_view");
-                //glUniformMatrix4fv(loc, 1, false,  view.e);
-                //g_renderer.programs[+Shader::Main]->UpdateUniformMat4("u_model", 1, false, camera_mat.e);
-                //loc = glGetUniformLocation(dc.program, "u_model");
-                //glUniformMatrix4fv(loc, 1, false, camera_mat.e);
-                //loc = glGetUniformLocation(dc.program, "u_time");
-                //glUniform1f(loc, time);
 
                 glDrawElements(GL_TRIANGLES, arrsize(indices3D), GL_UNSIGNED_INT, 0);
             }

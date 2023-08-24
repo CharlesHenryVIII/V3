@@ -452,11 +452,15 @@ int main(int argc, char* argv[])
             glClearDepth(1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-#if 1
+#if 0
+            //Pathtraced voxel rendering
+            {
+                
+            }
+#else
+            //Rasterized voxel rendering
             {
                 //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
                 g_renderer.shaders[+Shader::Voxel_Rast]->UseShader();
                 g_renderer.voxel_rast_ib->Bind();
                 g_renderer.voxel_rast_vb->Bind();
@@ -466,13 +470,6 @@ int main(int argc, char* argv[])
 
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
                 glVertexAttribPointer(0, 3, GL_FLOAT,           GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, p));
-                //glEnableVertexArrayAttrib(g_renderer.vao, 1);
-                //glVertexAttribPointer(1, 1, GL_UNSIGNED_INT,    GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, rgba));
-                //glEnableVertexArrayAttrib(g_renderer.vao, 2);
-                //glVertexAttribPointer(2, 1, GL_UNSIGNED_BYTE,   GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, n));
-                //glEnableVertexArrayAttrib(g_renderer.vao, 3);
-                //glVertexAttribPointer(3, 1, GL_UNSIGNED_BYTE,   GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, ao));
-
                 glEnableVertexArrayAttrib(g_renderer.vao, 1);
                 glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, rgba));
                 glEnableVertexArrayAttrib(g_renderer.vao, 2);
@@ -480,39 +477,10 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 3);
                 glVertexAttribIPointer(3, 1, GL_UNSIGNED_BYTE,  sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, ao));
 
-                //glVertexAttribIPointer(1, 1, GL_UNSIGNED_BYTE, sizeof(Vertex_Chunk), (void*)offsetof(Vertex_Chunk, spriteIndex));
-                //glEnableVertexArrayAttrib(g_renderer.vao, 1);
-                //glVertexAttribIPointer(2, 1, GL_UNSIGNED_BYTE, sizeof(Vertex_Chunk), (void*)offsetof(Vertex_Chunk, nAndConnectedVertices));
-                //glEnableVertexArrayAttrib(g_renderer.vao, 2);
-
                 g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
                 g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_view",        1, false, view.e);
 
                 glDrawElements(GL_TRIANGLES, vox_mesh_index_count, GL_UNSIGNED_INT, 0);
-                //glDrawElements(GL_TRIANGLES, (GLsizei)voxel_vertices.size(), GL_UNSIGNED_INT, 0);
-            }
-#else
-            //Render basic cube
-            {
-                glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-                g_renderer.textures[Texture::Minecraft]->Bind();
-                g_renderer.shaders[+Shader::Main]->UseShader();
-
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-
-                glEnableVertexArrayAttrib(g_renderer.vao, 0);
-                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, p));
-                glEnableVertexArrayAttrib(g_renderer.vao, 1);
-                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
-                glEnableVertexArrayAttrib(g_renderer.vao, 2);
-                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, n));
-
-                g_renderer.shaders[+Shader::Main]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
-                g_renderer.shaders[+Shader::Main]->UpdateUniformMat4("u_view", 1, false, view.e);
-
-                glDrawElements(GL_TRIANGLES, arrsize(indices3D), GL_UNSIGNED_INT, 0);
             }
 #endif
 

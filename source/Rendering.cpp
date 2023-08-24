@@ -132,7 +132,6 @@ void InitializeVideo()
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
     glEnable(GL_CULL_FACE);
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     //glEnable(GL_FRAMEBUFFER_SRGB);
 
     glGenVertexArrays(1, &g_renderer.vao);

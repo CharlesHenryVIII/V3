@@ -167,9 +167,11 @@ int main(int argc, char* argv[])
 
     g_renderer.shaders[+Shader::Main]->UseShader();
 
-    Vec3 camera_pos = { 0,  2, -2 };
-    float camera_yaw = 0.0f;
-    float camera_pitch = 0.0f;
+    float   camera_dis      = 2.0f;
+    float   camera_yaw      = 0.0f;
+    float   camera_pitch    = 0.0f;
+    Vec3    camera_velocity = { };
+    Vec3    camera_look_at  = { };
 
 
 
@@ -357,22 +359,41 @@ int main(int argc, char* argv[])
                 float offset = 0.1f;
                 camera_pitch = Clamp(camera_pitch, (-quater_pi) * 3 + offset, quater_pi - offset);
             }
-            camera_pos.y = Max(+1.0f, camera_pos.y - playerInput.mouse.wheelInstant.y / 4);
-            camera_pos.z = Min(-1.0f, camera_pos.z + playerInput.mouse.wheelInstant.y / 4);
+            camera_dis = Max(1.0f, camera_dis - ((playerInput.mouse.wheelInstant.y / 4) * (0.3f * camera_dis)));
 
-            Mat4 camera_world_matrix;
+            Mat4 camera_world_swivel;
             Mat4 trans;
             Mat4 rot;
-            gb_mat4_identity(&camera_world_matrix);
+            gb_mat4_identity(&camera_world_swivel);
             gb_mat4_from_quat(&rot, gb_quat_euler_angles(camera_pitch, camera_yaw, 0.0f));
-            gb_mat4_translate(&trans, camera_pos);
-            camera_world_matrix = rot * trans;//trans * rot;
-            Vec3 camera_pos_world = camera_world_matrix.col[3].xyz;
+            Vec3 camera_position = { 0, camera_dis, -camera_dis };
+            gb_mat4_translate(&trans, camera_position);
+            camera_world_swivel = rot * trans;
+            Vec3 camera_pos_swivel = camera_world_swivel.col[3].xyz;
 
-            gbMat4 perspective;
+            Mat4 pre_movement;
+            gb_mat4_look_at(&pre_movement, camera_pos_swivel, camera_look_at, { 0,1,0 });
+
+            //travel distance
+            Vec3 wanted_direction = {   playerInput.keyStates[SDLK_a].down ? 1.0f : (playerInput.keyStates[SDLK_d].down ? -1.0f : 0.0f),
+                                        0.0f,
+                                        playerInput.keyStates[SDLK_w].down ? 1.0f : (playerInput.keyStates[SDLK_s].down ? -1.0f : 0.0f) };
+
+            float speed = 10.0f;
+            Mat4 yaw_only_rotation;
+            gb_mat4_from_quat(&yaw_only_rotation, gb_quat_euler_angles(0.0f, camera_yaw, 0.0f));
+            Vec3 front = (yaw_only_rotation * GetVec4(wanted_direction, 0)).xyz;
+            gb_vec3_norm0(&front, front);
+            Vec3 targetVelocity = front * speed;
+            camera_velocity = Converge(camera_velocity, targetVelocity, 16.0f, deltaTime);
+            camera_look_at += camera_velocity * deltaTime;
+
+
+            Mat4 perspective;
             gb_mat4_perspective(&perspective, 3.14f / 2, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
-            gbMat4 view;
-            gb_mat4_look_at(&view, camera_pos_world, {}, { 0,1,0 });
+            Mat4 view;
+            Vec3 camera_pos_world = camera_pos_swivel + camera_look_at;
+            gb_mat4_look_at(&view, camera_pos_world, camera_look_at, { 0,1,0 });
 
 
 
@@ -411,10 +432,12 @@ int main(int argc, char* argv[])
                             ImGui::TableSetupColumn("Z");
                             ImGui::TableHeadersRow();
 
-                            GenericImGuiTable("Camera_pos",     "%+08.2f", camera_pos.e);
-                            GenericImGuiTable("Camera_world",   "%+08.2f", camera_pos_world.e);
+                            GenericImGuiTable("Camera_dis",     "%+08.2f", &camera_dis, 1);
                             GenericImGuiTable("Camera_yaw",     "%+08.2f", &camera_yaw,     1);
                             GenericImGuiTable("Camera_pitch",   "%+08.2f", &camera_pitch,   1);
+                            GenericImGuiTable("Camera_swivel",  "%+08.2f", camera_pos_swivel.e);
+                            GenericImGuiTable("Camera_look_at", "%+08.2f", camera_look_at.e);
+                            GenericImGuiTable("Camera_world",   "%+08.2f", camera_pos_world.e);
 
                             ImGui::EndTable();
                         }
@@ -431,6 +454,7 @@ int main(int argc, char* argv[])
 
 #if 1
             {
+                //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
                 glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
                 g_renderer.shaders[+Shader::Voxel_Rast]->UseShader();

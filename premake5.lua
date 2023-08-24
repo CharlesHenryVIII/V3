@@ -1,6 +1,8 @@
 workspace "V3"
     configurations { "Debug", "Profile", "Release" }
     platforms { "x64" }
+    staticruntime "On"
+    runtime "Debug"
 
 project "V3"
     --symbolspath '$(OutDir)$(TargetName).pdb'

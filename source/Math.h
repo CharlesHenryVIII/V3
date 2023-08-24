@@ -1,6 +1,7 @@
 #pragma once
 //#include "SDL\include\SDL_pixels.h"
 #include "gb_math.h"
+//#include "Misc.h"
 
 #include <vector>
 #include <cassert>
@@ -24,6 +25,11 @@ union Color {
     float e[4];
 };
 
+union ColorInt {
+    u32 rgba;
+    struct { u8 r, g, b, a; };
+    u8 e[4];
+};
 
 
 const Color Red         = { 1.00f, 0.00f, 0.00f, 1.00f };
@@ -77,7 +83,7 @@ MATH_PREFIX Vec4 GetVec4(Vec3 a, float b)
 //    float e[5];
 //};
 
-union Uint32Pack {
+union U32Pack {
     u32 pack;
     struct { u8 r, g, b, a; };
     struct { u8 x, y, z, w; };

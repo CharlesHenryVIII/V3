@@ -3,35 +3,16 @@
 #include "Math.h"
 #include "Misc.h"
 #include "Rendering_Texture.h"
+#include "Vox.h"
 
 enum class Shader : u32 {
     Invalid,
     Main,
+    Voxel_Rast,
     Count,
 };
 ENUMOPS(Shader);
 
-class ShaderProgram;
-
-struct Renderer {
-    SDL_Window* SDL_Context = nullptr;
-    SDL_GLContext GL_Context = {};
-    GLuint vao;
-    //bool msaaEnabled = true;
-    bool hasAttention;
-    //i32 maxMSAASamples = 1;
-    i32 swapInterval = 1;
-    //float maxAnisotropic;
-    //float currentAnisotropic = 1.0f;
-    Vec2Int size;
-    Vec2Int pos;
-    ShaderProgram*  programs[+Shader::Count] = {};
-    Texture*        textures[Texture::Count] = {};
-
-    //ShaderProgram*  programs[+Shader::Count] = {};
-    //Texture*        textures[Texture::Count] = {};
-};
-extern Renderer g_renderer;
 
 class ShaderProgram
 {
@@ -64,6 +45,83 @@ public:
     template<typename T>
     void UpdateUniform(const char* name, T v);
 };
+
+class GpuBuffer
+{
+    GLuint m_target;
+    size_t m_allocated_size;
+    GLuint m_handle;
+
+    GpuBuffer(const GpuBuffer& rhs) = delete;
+    GpuBuffer& operator=(const GpuBuffer& rhs) = delete;
+
+protected:
+    GpuBuffer(GLuint target)
+        : m_target(target)
+        , m_allocated_size(0)
+    {
+        glGenBuffers(1, &m_handle);
+#ifdef _DEBUGPRINT
+        DebugPrint("GPU Buffer Created %i\n", m_target);
+#endif
+    }
+    void UploadData(void* data, size_t size);
+
+public:
+    virtual ~GpuBuffer();
+    void Bind();
+    GLuint GetGLHandle();
+};
+
+class IndexBuffer : public GpuBuffer
+{
+public:
+    IndexBuffer()
+        : GpuBuffer(GL_ELEMENT_ARRAY_BUFFER)
+    { }
+    size_t m_count = 0;
+    void Upload(u32* indices, size_t count);
+};
+
+class VertexBuffer : public GpuBuffer
+{
+public:
+    VertexBuffer()
+        : GpuBuffer(GL_ARRAY_BUFFER)
+    { }
+    void Upload(Vertex* vertices, size_t count);
+    void Upload(Vertex_Voxel* vertices, size_t count);
+    template <typename T>
+    void Upload(T* vertices, size_t count)
+    {
+        UploadData(vertices, sizeof(vertices[0]) * count);
+#ifdef _DEBUGPRINT
+        DebugPrint("Vertex Buffer Upload,size %i\n", count);
+#endif
+    }
+};
+
+struct Renderer {
+    SDL_Window* SDL_Context = nullptr;
+    SDL_GLContext GL_Context = {};
+    GLuint vao;
+    IndexBuffer*    voxel_rast_ib = nullptr;
+    VertexBuffer*   voxel_rast_vb = nullptr;
+    //bool msaaEnabled = true;
+    bool hasAttention;
+    //i32 maxMSAASamples = 1;
+    i32 swapInterval = 1;
+    //float maxAnisotropic;
+    //float currentAnisotropic = 1.0f;
+    Vec2Int size;
+    Vec2Int pos;
+    ShaderProgram*  shaders[+Shader::Count] = {};
+    Texture*        textures[Texture::Count] = {};
+
+    //ShaderProgram*  programs[+Shader::Count] = {};
+    //Texture*        textures[Texture::Count] = {};
+};
+extern Renderer g_renderer;
 
 
 void InitializeVideo();

@@ -3,6 +3,7 @@
 #include "Rendering.h"
 #include "Misc.h"
 #include "WinInterop_File.h"
+#include "Vox.h"
 
 Renderer g_renderer;
 
@@ -39,11 +40,34 @@ void OpenGLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
         break;
     }
 
-    printf("%s severity: %s\n",
+    DebugPrint("%s severity: %s\n",
             _severity.c_str(), message);
 
     AssertOnce(severity != GL_DEBUG_SEVERITY_HIGH);
 }
+
+void FillIndexBuffer(IndexBuffer* ib)
+{
+    std::vector<u32> arr;
+
+    size_t amount = VOXEL_MAX_SIZE * VOXEL_MAX_SIZE * VOXEL_MAX_SIZE * 6 * 6;
+    arr.reserve(amount);
+    i32 baseIndex = 0;
+    for (i32 i = 0; i < amount; i += 6)
+    {
+        arr.push_back(baseIndex + 0);
+        arr.push_back(baseIndex + 1);
+        arr.push_back(baseIndex + 2);
+        arr.push_back(baseIndex + 1);
+        arr.push_back(baseIndex + 3);
+        arr.push_back(baseIndex + 2);
+
+        baseIndex += 4; //Amount of vertices
+    }
+    
+    ib->Upload(arr.data(), amount);
+}
+
 
 void InitializeVideo()
 {
@@ -79,7 +103,7 @@ void InitializeVideo()
 
         if (majorVersionRequest != majorVersionActual && minorVersionRequest != minorVersionActual)
         {
-            printf("OpenGL could not set recommended version: %i.%i to %i.%i\n", majorVersionRequest, minorVersionRequest,
+            DebugPrint("OpenGL could not set recommended version: %i.%i to %i.%i\n", majorVersionRequest, minorVersionRequest,
                     majorVersionActual,  minorVersionActual);
             FAIL;
         }
@@ -92,9 +116,9 @@ void InitializeVideo()
     if (GLEW_OK != err)
     {
         /* Problem: glewInit failed, something is seriously wrong. */
-        printf("Error: %s\n", glewGetErrorString(err));
+        DebugPrint("Error: %s\n", glewGetErrorString(err));
     }
-    printf("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+    DebugPrint("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 
     //stbi_set_flip_vertically_on_load(true);
     glEnable(GL_BLEND);
@@ -109,14 +133,19 @@ void InitializeVideo()
     glDepthMask(GL_TRUE);
     glEnable(GL_CULL_FACE);
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glEnable(GL_FRAMEBUFFER_SRGB);
+    //glEnable(GL_FRAMEBUFFER_SRGB);
 
     glGenVertexArrays(1, &g_renderer.vao);
     glBindVertexArray(g_renderer.vao);
 
     g_renderer.textures[Texture::Minecraft] = new Texture("assets/MinecraftSpriteSheet20120215Modified.png", GL_SRGB8_ALPHA8);
 
-    g_renderer.programs[+Shader::Main] = new ShaderProgram("Source/Shaders/Main.vert", "Source/Shaders/Main.frag");
+    g_renderer.shaders[+Shader::Main] = new ShaderProgram("Source/Shaders/Main.vert", "Source/Shaders/Main.frag");
+    g_renderer.shaders[+Shader::Voxel_Rast] = new ShaderProgram("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag");
+
+    g_renderer.voxel_rast_ib = new IndexBuffer();
+    FillIndexBuffer(g_renderer.voxel_rast_ib);
+    g_renderer.voxel_rast_vb = new VertexBuffer();
 
     //Vertex verticees[] =
     //{
@@ -145,7 +174,7 @@ void CheckFrameBufferStatus()
     GLint err = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (err != GL_FRAMEBUFFER_COMPLETE)
     {
-        printf("Error: Frame buffer error: %d \n", err);
+        DebugPrint("Error: Frame buffer error: %d \n", err);
         assert(false);
     }
 }
@@ -170,7 +199,7 @@ void RenderUpdate(Vec2Int windowSize, float deltaTime)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (s_last_shader_update_time + 0.1f <= s_incremental_time)
     {
-        for (ShaderProgram* s : g_renderer.programs)
+        for (ShaderProgram* s : g_renderer.shaders)
         {
             if (s)
                 s->CheckForUpdate();
@@ -213,7 +242,7 @@ bool ShaderProgram::CompileShader(GLuint handle, std::string text, const std::st
         glGetShaderInfoLog(handle, log_length, NULL, (GLchar*)infoString.c_str());
         //std::string errorTitle = ToString("%s compilation error: %s\n", fileName.c_str(), infoString.c_str());
         std::string errorTitle = fileName + " Compilation Error: ";
-        printf((errorTitle + infoString + "\n").c_str());
+        DebugPrint((errorTitle + infoString + "\n").c_str());
 
         SDL_MessageBoxButtonData buttons[] = {
             //{ /* .flags, .buttonid, .text */        0, 0, "Continue" },
@@ -224,7 +253,7 @@ bool ShaderProgram::CompileShader(GLuint handle, std::string text, const std::st
         i32 buttonID = CreateMessageWindow(buttons, arrsize(buttons), MessageBoxType::Error, errorTitle.c_str(), infoString.c_str());
         if (buttons[buttonID].buttonid == 2)//NOTE: Stop button
         {
-            printf("stop hit");
+            DebugPrint("stop hit");
             g_running = false;
             return false;
         }
@@ -318,7 +347,7 @@ void ShaderProgram::CheckForUpdate()
             GLchar info[4096] = {};
             assert(log_length > 0);
             glGetProgramInfoLog(handle, log_length, NULL, info);
-            printf("Shader linking error: %s\n", info);
+            DebugPrint("Shader linking error: %s\n", info);
 
             SDL_MessageBoxButtonData buttons[] = {
                 { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Retry" },
@@ -433,6 +462,63 @@ void ShaderProgram::UpdateUniformUintStream(const char* name, GLsizei count, GLu
     glUniform1uiv(loc, count, values);
 #ifdef _DEBUGPRINT
     DebugPrint("Shader Uniform Updated %s\n", name);
+#endif
+}
+
+void GpuBuffer::UploadData(void* data, size_t size)
+{
+    Bind();
+    size_t required_size = size;
+    if (m_allocated_size < required_size)
+    {
+        glBufferData(m_target, required_size, nullptr, GL_STATIC_DRAW);
+        m_allocated_size = required_size;
+    }
+    glBufferSubData(m_target, 0, required_size, data);
+}
+
+GpuBuffer::~GpuBuffer()
+{
+    glDeleteBuffers(1, &m_handle);
+#ifdef _DEBUGPRINT
+    DebugPrint("GPU Buffer deleted %i, %i\n", m_target, m_handle);
+#endif
+}
+
+void GpuBuffer::Bind()
+{
+    glBindBuffer(m_target, m_handle);
+#ifdef _DEBUGPRINT
+    DebugPrint("GPU Buffer Bound %i, %i\n", m_target, m_handle);
+#endif
+}
+
+GLuint GpuBuffer::GetGLHandle()
+{
+    return m_handle;
+}
+
+void IndexBuffer::Upload(u32* indices, size_t count)
+{
+    m_count = Max(m_count, count);
+    UploadData(indices, sizeof(indices[0]) * count);
+#ifdef _DEBUGPRINT
+    DebugPrint("Index Buffer Upload,size %i\n", count);
+#endif
+}
+
+void VertexBuffer::Upload(Vertex* vertices, size_t count)
+{
+    UploadData(vertices, sizeof(vertices[0]) * count);
+#ifdef _DEBUGPRINT
+    DebugPrint("Vertex Buffer Upload,size %i\n", count);
+#endif
+}
+void VertexBuffer::Upload(Vertex_Voxel* vertices, size_t count)
+{
+    UploadData(vertices, sizeof(vertices[0]) * count);
+#ifdef _DEBUGPRINT
+    DebugPrint("Vertex Buffer Upload,size %i\n", count);
 #endif
 }
 

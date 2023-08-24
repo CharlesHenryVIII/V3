@@ -18,11 +18,26 @@
 #include "Rendering.h"
 #include "Input.h"
 #include "WinInterop_File.h"
+#include "Vox.h"
 
 #include <unordered_map>
 #include <vector>
 //#include <algorithm>
 
+
+template <typename T>
+void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
+{
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextUnformatted(title.data());
+    for (i32 column = 0; column < length; column++)
+    {
+        ImGui::TableSetColumnIndex(column + 1);
+        std::string string = ToString(fmt.c_str(), firstValue[column]);
+        ImGui::TextUnformatted(string.data());
+    }
+}
 
 static void HelpMarker(const char* desc)
 {
@@ -37,38 +52,18 @@ static void HelpMarker(const char* desc)
     }
 }
 
-int main(int argc, char* argv[])
+void InitializeImGui()
 {
-    //Initilizers
-    InitializeVideo();
-
-    double freq = double(SDL_GetPerformanceFrequency()); //HZ
-    double startTime = SDL_GetPerformanceCounter() / freq;
-    double totalTime = SDL_GetPerformanceCounter() / freq - startTime; //sec
-    double previousTime = totalTime;
-    double LastShaderUpdateTime = totalTime;
-
-    bool showIMGUI = true;
-
     //___________
     //IMGUI SETUP
     //___________
 
-#if 1
     // GL 3.0 + GLSL 130
     const char* glsl_version = "#version 460";
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
-#else
-    // GL 3.0 + GLSL 130
-    const char* glsl_version = "#version 130";
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#endif
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -84,21 +79,31 @@ int main(int argc, char* argv[])
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForOpenGL(g_renderer.SDL_Context, g_renderer.GL_Context);
     ImGui_ImplOpenGL3_Init(glsl_version);
+
+    SDL_ShowCursor(SDL_ENABLE);
+}
+
+int main(int argc, char* argv[])
+{
+    //Initilizers
+    InitializeVideo();
+    InitializeImGui();
+
+    double freq = double(SDL_GetPerformanceFrequency()); //HZ
+    double startTime = SDL_GetPerformanceCounter() / freq;
+    double totalTime = SDL_GetPerformanceCounter() / freq - startTime; //sec
+    double previousTime = totalTime;
+    double LastShaderUpdateTime = totalTime;
+
+    bool showIMGUI = true;
     bool show_demo_window = false;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     ImGuiIO& imGuiIO = ImGui::GetIO();
     bool g_cursorEngaged = true;
-    SDL_ShowCursor(SDL_ENABLE);
     CommandHandler playerInput;
     float camera_distance = 1.0f;
     float camera_rotation = 0.0f;
-
-    //WorldPos camera_position = GetCameraPosition(camera_distance, camera_rotation);
-
-    int x, y, n;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char* data = stbi_load("Grass_Block_Jumper.png", &x, &y, &n, 4);
 
     float p = 0.5f;
     Vertex vertices[] = {
@@ -133,6 +138,7 @@ int main(int argc, char* argv[])
         { { -p,  p, -p }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
         { { -p, -p, -p }, { 1.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
     };
+
     static_assert(arrsize(vertices) == 24, "");
 
 
@@ -159,12 +165,22 @@ int main(int argc, char* argv[])
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices3D), indices3D, GL_STATIC_DRAW);
 
-    g_renderer.programs[+Shader::Main]->UseShader();
+    g_renderer.shaders[+Shader::Main]->UseShader();
 
     Vec3 camera_pos = { 0,  2, -2 };
     float camera_yaw = 0.0f;
     float camera_pitch = 0.0f;
 
+
+
+    VoxData voxels;
+    LoadVoxFile(voxels, "assets/Test_01.vox");
+    //LoadVoxFile(voxels, "assets/castle.vox");
+    std::vector<Vertex_Voxel> voxel_vertices;
+    u32 vox_mesh_index_count = CreateMeshFromVox(voxel_vertices, voxels);
+    assert(vox_mesh_index_count);
+    g_renderer.voxel_rast_vb->Upload(voxel_vertices.data(), voxel_vertices.size());
+    //LoadVoxFile(vm, bv, "assets/Test_01doo.vox");
 
     while (g_running)
     {
@@ -413,11 +429,51 @@ int main(int argc, char* argv[])
             glClearDepth(1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+#if 1
+            {
+                glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
+                g_renderer.shaders[+Shader::Voxel_Rast]->UseShader();
+                g_renderer.voxel_rast_ib->Bind();
+                g_renderer.voxel_rast_vb->Bind();
+
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+
+                glEnableVertexArrayAttrib(g_renderer.vao, 0);
+                glVertexAttribPointer(0, 3, GL_FLOAT,           GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, p));
+                //glEnableVertexArrayAttrib(g_renderer.vao, 1);
+                //glVertexAttribPointer(1, 1, GL_UNSIGNED_INT,    GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, rgba));
+                //glEnableVertexArrayAttrib(g_renderer.vao, 2);
+                //glVertexAttribPointer(2, 1, GL_UNSIGNED_BYTE,   GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, n));
+                //glEnableVertexArrayAttrib(g_renderer.vao, 3);
+                //glVertexAttribPointer(3, 1, GL_UNSIGNED_BYTE,   GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, ao));
+
+                glEnableVertexArrayAttrib(g_renderer.vao, 1);
+                glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, rgba));
+                glEnableVertexArrayAttrib(g_renderer.vao, 2);
+                glVertexAttribIPointer(2, 1, GL_UNSIGNED_BYTE,  sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, n));
+                glEnableVertexArrayAttrib(g_renderer.vao, 3);
+                glVertexAttribIPointer(3, 1, GL_UNSIGNED_BYTE,  sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, ao));
+
+                //glVertexAttribIPointer(1, 1, GL_UNSIGNED_BYTE, sizeof(Vertex_Chunk), (void*)offsetof(Vertex_Chunk, spriteIndex));
+                //glEnableVertexArrayAttrib(g_renderer.vao, 1);
+                //glVertexAttribIPointer(2, 1, GL_UNSIGNED_BYTE, sizeof(Vertex_Chunk), (void*)offsetof(Vertex_Chunk, nAndConnectedVertices));
+                //glEnableVertexArrayAttrib(g_renderer.vao, 2);
+
+                g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
+                g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_view",        1, false, view.e);
+
+                glDrawElements(GL_TRIANGLES, vox_mesh_index_count, GL_UNSIGNED_INT, 0);
+                //glDrawElements(GL_TRIANGLES, (GLsizei)voxel_vertices.size(), GL_UNSIGNED_INT, 0);
+            }
+#else
+            //Render basic cube
             {
                 glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
                 g_renderer.textures[Texture::Minecraft]->Bind();
-                g_renderer.programs[+Shader::Main]->UseShader();
+                g_renderer.shaders[+Shader::Main]->UseShader();
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
@@ -429,11 +485,12 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 2);
                 glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, n));
 
-                g_renderer.programs[+Shader::Main]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
-                g_renderer.programs[+Shader::Main]->UpdateUniformMat4("u_view", 1, false, view.e);
+                g_renderer.shaders[+Shader::Main]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
+                g_renderer.shaders[+Shader::Main]->UpdateUniformMat4("u_view", 1, false, view.e);
 
                 glDrawElements(GL_TRIANGLES, arrsize(indices3D), GL_UNSIGNED_INT, 0);
             }
+#endif
 
 
 

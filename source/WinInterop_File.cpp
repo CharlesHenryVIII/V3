@@ -56,6 +56,7 @@ void File::Init(const std::string& filename, File::Mode fileMode, bool createIfN
         GetHandle();
     }
     m_handleIsValid = (m_handle != INVALID_HANDLE_VALUE);
+    assert(m_handleIsValid);
     //assert(m_handleIsValid);
     auto filePointerLocation = FILE_END;
 
@@ -158,7 +159,7 @@ void File::GetTime()
     FILETIME lastWriteTime;
     if (!GetFileTime(m_handle, &creationTime, &lastAccessTime, &lastWriteTime))
     {
-        printf("GetFileTime failed with %d\n", GetLastError());
+        DebugPrint("GetFileTime failed with %d\n", GetLastError());
         m_timeIsValid = false;
     }
     else

@@ -139,12 +139,31 @@ void InitializeVideo()
 
     g_renderer.textures[Texture::Minecraft] = new Texture("assets/MinecraftSpriteSheet20120215Modified.png", GL_SRGB8_ALPHA8);
 
-    g_renderer.shaders[+Shader::Main] = new ShaderProgram("Source/Shaders/Main.vert", "Source/Shaders/Main.frag");
+    g_renderer.shaders[+Shader::Main]       = new ShaderProgram("Source/Shaders/Main.vert", "Source/Shaders/Main.frag");
     g_renderer.shaders[+Shader::Voxel_Rast] = new ShaderProgram("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag");
+    g_renderer.shaders[+Shader::Voxel]      = new ShaderProgram("Source/Shaders/Voxel.vert", "Source/Shaders/Voxel.frag");
 
     g_renderer.voxel_rast_ib = new IndexBuffer();
     FillIndexBuffer(g_renderer.voxel_rast_ib);
     g_renderer.voxel_rast_vb = new VertexBuffer();
+
+    {
+        g_renderer.voxel_ib = new IndexBuffer();
+        u32 a[] = { 0, 1, 2, 1, 3, 2 };
+        g_renderer.voxel_ib->Upload(a, arrsize(a));
+    }
+    
+
+    {
+        g_renderer.voxel_vb = new VertexBuffer();
+        Vec3 a[] = {
+            { -1.0f, -1.0f, 0.0f }, // 0
+            { +1.0f, -1.0f, 0.0f }, // 1
+            { -1.0f, +1.0f, 0.0f }, // 2
+            { +1.0f, +1.0f, 0.0f }  // 3
+        };
+        g_renderer.voxel_vb->Upload(a, arrsize(a));
+    }
 
     //Vertex verticees[] =
     //{

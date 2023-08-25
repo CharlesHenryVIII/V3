@@ -9,6 +9,7 @@ enum class Shader : u32 {
     Invalid,
     Main,
     Voxel_Rast,
+    Voxel,
     Count,
 };
 ENUMOPS(Shader);
@@ -105,8 +106,10 @@ struct Renderer {
     SDL_Window* SDL_Context = nullptr;
     SDL_GLContext GL_Context = {};
     GLuint vao;
-    IndexBuffer*    voxel_rast_ib = nullptr;
-    VertexBuffer*   voxel_rast_vb = nullptr;
+    IndexBuffer*    voxel_rast_ib   = nullptr;
+    VertexBuffer*   voxel_rast_vb   = nullptr;
+    IndexBuffer*    voxel_ib        = nullptr;
+    VertexBuffer*   voxel_vb        = nullptr;
     //bool msaaEnabled = true;
     bool hasAttention;
     //i32 maxMSAASamples = 1;

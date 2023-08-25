@@ -286,7 +286,7 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
             {
                 vc = GetDataAndIncrement<VoxChunk>(v); //color index is off by one
                 VALIDATE_V(vc.colorIndex > 0, false);
-                vox.color_indices[vox.color_indices.size() - 1].e[vc.x][vc.y][vc.z] = (vc.colorIndex - 1);
+                vox.color_indices[vox.color_indices.size() - 1].e[vc.x][vc.z][vc.y] = (vc.colorIndex - 1);
             }
 
             break;
@@ -787,7 +787,7 @@ u8 GetVoxel(const VoxelBlockData& voxels, const Vec3Int& p)
     if (p.x >= 0 && p.x < VOXEL_MAX_SIZE &&
     p.y >= 0 && p.y < VOXEL_MAX_SIZE &&
     p.z >= 0 && p.z < VOXEL_MAX_SIZE)
-        return voxels.e[p.x][p.z][p.y];
+        return voxels.e[p.x][p.y][p.z];
     return 0;
 }
 
@@ -801,7 +801,7 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
         for (i32 y = 0; y < VOXEL_MAX_SIZE; y++)
             for (i32 x = 0; x < VOXEL_MAX_SIZE; x++)
             {
-                const Vec3Int this_voxel_pos = { x, z, y };
+                const Vec3Int this_voxel_pos = { x, y, z };
                 const u8 this_voxel_i = GetVoxel(voxel_color_is, this_voxel_pos);
                 if (this_voxel_i)
                 {

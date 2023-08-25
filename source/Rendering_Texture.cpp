@@ -2,18 +2,77 @@
 
 #include "stb/stb_image.h"
 
+
+Texture::~Texture()
+{
+    glDeleteTextures(1, &m_handle);
+}
+
+void Texture::Bind(u32 slot)
+{
+    assert(slot >= GL_TEXTURE0);
+    assert(slot <= GL_TEXTURE31);
+    glActiveTexture(slot);
+    glBindTexture(m_target, m_handle);
+#ifdef _DEBUGPRINT
+    DebugPrint("Texture Bound\n");
+#endif
+}
+
+enum TextureTarget : u32 {
+    TextureTarget_Invalid = 0,
+    TextureTarget_1D = GL_TEXTURE_1D,
+    TextureTarget_2D = GL_TEXTURE_2D,
+    TextureTarget_2DMultisample = GL_TEXTURE_2D_MULTISAMPLE,
+    TextureTarget_3D = GL_TEXTURE_3D,
+    TextureTarget_3DMultisample = GL_TEXTURE_2D_MULTISAMPLE_ARRAY,
+    TextureTarget_Count,
+};
+
 Texture::Texture(TextureParams tp)
 {
     assert(tp.samples);
-    if (tp.samples > 1)
+
+    if (tp.size.z) //3D
     {
-        m_target = GL_TEXTURE_2D_MULTISAMPLE;
+        assert((!!tp.size.x) && (!!tp.size.y) && (!!tp.size.z));
+        if (tp.samples == 1)
+        {
+            m_target = GL_TEXTURE_3D;
+        }
+        else
+        {
+            assert(false);
+            m_target = GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
+        }
+    }
+    else if (tp.size.y) //2D
+    {
+        assert((tp.size.x != 0) && (tp.size.y != 0) && (tp.size.z == 0));
+        if (tp.samples == 1)
+        {
+            m_target = GL_TEXTURE_2D;
+        }
+        else
+        {
+            m_target = GL_TEXTURE_2D_MULTISAMPLE;
+        }
+    }
+    else //1D
+    {
+        assert((tp.size.x != 0) && (tp.size.y == 0) && (tp.size.z == 0));
+        if (tp.samples == 1)
+        {
+            m_target = GL_TEXTURE_1D;
+        }
+        else
+            assert(false);
     }
 
     glGenTextures(1, &m_handle);
     Bind();
 
-    if (m_target != GL_TEXTURE_2D_MULTISAMPLE)
+    if (tp.samples == 1)
     {
         glTexParameteri(m_target, GL_TEXTURE_MIN_FILTER, tp.minFilter);
         glTexParameteri(m_target, GL_TEXTURE_MAG_FILTER, tp.magFilter);
@@ -21,10 +80,40 @@ Texture::Texture(TextureParams tp)
         glTexParameteri(m_target, GL_TEXTURE_WRAP_T, tp.wrapT);
     }
 
-    if (tp.samples == 1)
-        glTexImage2D(GL_TEXTURE_2D, 0, tp.internalFormat, tp.size.x, tp.size.y, 0, tp.format, tp.type, tp.data);
-    else
-        glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, tp.samples, tp.internalFormat, tp.size.x, tp.size.y, GL_TRUE); // NOTE: Could change to GL_FALSE to use custom sample locations
+    switch (m_target)
+    {
+    case GL_TEXTURE_3D:
+    {
+        glTexImage3D(m_target, 0, tp.internalFormat, tp.size.x, tp.size.y, tp.size.z, 0, tp.format, tp.type, tp.data);
+        break;
+    }
+    case GL_TEXTURE_2D_MULTISAMPLE_ARRAY:
+    {
+        assert(false);
+        glTexImage3DMultisample(m_target, tp.samples, tp.internalFormat, tp.size.x, tp.size.y, tp.size.z, GL_TRUE);
+        break;
+    }
+    case GL_TEXTURE_2D: 
+    {
+        glTexImage2D(m_target, 0, tp.internalFormat, tp.size.x, tp.size.y, 0, tp.format, tp.type, tp.data);
+        break;
+    }
+    case GL_TEXTURE_2D_MULTISAMPLE:
+    {
+        glTexImage2DMultisample(m_target, tp.samples, tp.internalFormat, tp.size.x, tp.size.y, GL_TRUE);
+        break;
+    }
+    case GL_TEXTURE_1D:
+    {
+        glTexImage1D(m_target, 0, tp.internalFormat, tp.size.x, 0, tp.format, tp.type, tp.data);
+        break;
+    }
+    default:
+    {
+        assert(false);
+        break;
+    }
+    }
 
     m_size = tp.size;
 #ifdef _DEBUGPRINT
@@ -34,7 +123,7 @@ Texture::Texture(TextureParams tp)
 
 Texture::Texture(const char* fileLocation, GLint colorFormat)
 {
-    m_data = stbi_load(fileLocation, &m_size.x, &m_size.y, &m_bytesPerPixel, STBI_rgb_alpha);
+    u8* data = stbi_load(fileLocation, &m_size.x, &m_size.y, &m_bytesPerPixel, STBI_rgb_alpha);
 
     glGenTextures(1, &m_handle);
     Bind();
@@ -42,8 +131,9 @@ Texture::Texture(const char* fileLocation, GLint colorFormat)
     glTexParameteri(m_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(m_target, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(m_target, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexImage2D(m_target, 0, colorFormat, m_size.x, m_size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_data);
-    //glTexImage2D(m_target, 0, GL_RGBA, m_size.x, m_size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_data);
+    glTexImage2D(m_target, 0, colorFormat, m_size.x, m_size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    stbi_image_free(data);
 #ifdef _DEBUGPRINT
     DebugPrint("Texture Created\n");
 #endif
@@ -51,8 +141,7 @@ Texture::Texture(const char* fileLocation, GLint colorFormat)
 
 Texture::Texture(u8* data, Vec2Int size, GLint colorFormat)//, int32 m_bytesPerPixel)
 {
-    m_data = data;
-    m_size = size;
+    m_size = Vec3Int({ size.x, size.y, 0 });
     m_bytesPerPixel = 4;
 
     glGenTextures(1, &m_handle);
@@ -61,23 +150,9 @@ Texture::Texture(u8* data, Vec2Int size, GLint colorFormat)//, int32 m_bytesPerP
     glTexParameteri(m_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(m_target, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(m_target, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexImage2D(m_target, 0, colorFormat, m_size.x, m_size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_data);
+    glTexImage2D(m_target, 0, colorFormat, m_size.x, m_size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 #ifdef _DEBUGPRINT
     DebugPrint("Texture Created\n");
-#endif
-}
-
-Texture::~Texture()
-{
-    glDeleteTextures(1, &m_handle);
-    stbi_image_free(m_data);
-}
-
-void Texture::Bind()
-{
-    glBindTexture(m_target, m_handle);
-#ifdef _DEBUGPRINT
-    DebugPrint("Texture Bound\n");
 #endif
 }
 
@@ -263,4 +338,5 @@ void TextureCube::Bind()
 {
     glBindTexture(GL_TEXTURE_CUBE_MAP, m_handle);
 }
+
 

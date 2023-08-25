@@ -24,6 +24,7 @@
 #include <vector>
 //#include <algorithm>
 
+#define RASTERIZED_RENDERING 0
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -180,9 +181,39 @@ int main(int argc, char* argv[])
     //LoadVoxFile(voxels, "assets/castle.vox");
     std::vector<Vertex_Voxel> voxel_vertices;
     u32 vox_mesh_index_count = CreateMeshFromVox(voxel_vertices, voxels);
-    assert(vox_mesh_index_count);
     g_renderer.voxel_rast_vb->Upload(voxel_vertices.data(), voxel_vertices.size());
-    //LoadVoxFile(vm, bv, "assets/Test_01doo.vox");
+    assert(vox_mesh_index_count);
+
+    {
+        Texture::TextureParams voxel_indices_parameters = {
+            .size = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
+            .minFilter  = GL_NEAREST,       //GL_LINEAR,
+            .magFilter  = GL_NEAREST,       //GL_LINEAR,
+            .wrapS      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
+            .wrapT      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
+            .internalFormat = GL_R8UI,
+            .format     = GL_RED_INTEGER,
+            .type       = GL_UNSIGNED_BYTE,
+            .samples    = 1,
+            .data       = voxels.color_indices[0].e,
+        };
+
+        Texture::TextureParams voxel_colors_parameters = {
+            .size = { VOXEL_PALETTE_MAX, 0, 0 },
+            .minFilter  = GL_NEAREST,       //GL_LINEAR,
+            .magFilter  = GL_NEAREST,       //GL_LINEAR,
+            .wrapS      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
+            .wrapT      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
+            .internalFormat = GL_RGBA,
+            .format     = GL_RGBA,
+            .type       = GL_UNSIGNED_BYTE,
+            .samples    = 1,
+            .data       = voxels.color_palette,
+        };
+
+        g_renderer.textures[Texture::Voxel_Indices] = new Texture(voxel_indices_parameters);
+        g_renderer.textures[Texture::Color_Palette] = new Texture(voxel_colors_parameters);
+    }
 
     while (g_running)
     {
@@ -452,10 +483,27 @@ int main(int argc, char* argv[])
             glClearDepth(1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-#if 0
+#if RASTERIZED_RENDERING == 0
             //Pathtraced voxel rendering
             {
-                
+                static_assert(GL_TEXTURE1 == GL_TEXTURE0 + 1);
+                static_assert(GL_TEXTURE2 == GL_TEXTURE0 + 2);
+                g_renderer.textures[Texture::Voxel_Indices]->Bind(GL_TEXTURE0);
+                g_renderer.textures[Texture::Color_Palette]->Bind(GL_TEXTURE1);
+                g_renderer.shaders[+Shader::Voxel]->UseShader();
+                g_renderer.voxel_ib->Bind();
+                g_renderer.voxel_vb->Bind();
+
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+
+                glEnableVertexArrayAttrib(g_renderer.vao, 0);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
+
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view",        1, false, view.e);
+
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             }
 #else
             //Rasterized voxel rendering
@@ -469,7 +517,7 @@ int main(int argc, char* argv[])
                 glDepthMask(GL_TRUE);
 
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
-                glVertexAttribPointer(0, 3, GL_FLOAT,           GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, p));
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, p));
                 glEnableVertexArrayAttrib(g_renderer.vao, 1);
                 glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, rgba));
                 glEnableVertexArrayAttrib(g_renderer.vao, 2);

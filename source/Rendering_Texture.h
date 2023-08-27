@@ -7,6 +7,7 @@ struct Texture {
     enum T : u32 {
         Invalid,
         Minecraft,
+        Plain,
         Voxel_Indices,
         Color_Palette,
         Count,

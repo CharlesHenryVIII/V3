@@ -10,6 +10,7 @@ enum class Shader : u32 {
     Main,
     Voxel_Rast,
     Voxel,
+    Cube,
     Count,
 };
 ENUMOPS(Shader);
@@ -96,6 +97,14 @@ public:
     void Upload(T* vertices, size_t count)
     {
         UploadData(vertices, sizeof(vertices[0]) * count);
+#ifdef _DEBUGPRINT
+        DebugPrint("Vertex Buffer Upload,size %i\n", count);
+#endif
+    }
+    template <typename T>
+    void Upload(std::vector<T>& vertices)
+    {
+        UploadData(vertices.data(), (sizeof(vertices[0]) * vertices.size()));
 #ifdef _DEBUGPRINT
         DebugPrint("Vertex Buffer Upload,size %i\n", count);
 #endif

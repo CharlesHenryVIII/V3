@@ -6,8 +6,8 @@ layout (binding = 1) uniform sampler1D  voxel_color_palette;
 
 out vec4 color;
 
-uniform mat4 u_perspective;
-uniform mat4 u_view;
+uniform mat4 u_projection_from_view;
+uniform mat4 u_view_from_world;
 
 ivec3 MagicaToTexelFetch(ivec3 a)
 {

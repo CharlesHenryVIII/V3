@@ -138,10 +138,13 @@ void InitializeVideo()
     glBindVertexArray(g_renderer.vao);
 
     g_renderer.textures[Texture::Minecraft] = new Texture("assets/MinecraftSpriteSheet20120215Modified.png", GL_SRGB8_ALPHA8);
+    u8 pixelTextureData[] = { 255, 255, 255, 255 };
+    g_renderer.textures[Texture::T::Plain]  = new Texture(pixelTextureData, { 1, 1 }, GL_RGBA);
 
-    g_renderer.shaders[+Shader::Main]       = new ShaderProgram("Source/Shaders/Main.vert", "Source/Shaders/Main.frag");
-    g_renderer.shaders[+Shader::Voxel_Rast] = new ShaderProgram("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag");
-    g_renderer.shaders[+Shader::Voxel]      = new ShaderProgram("Source/Shaders/Voxel.vert", "Source/Shaders/Voxel.frag");
+    g_renderer.shaders[+Shader::Main]       = new ShaderProgram("Source/Shaders/Main.vert",         "Source/Shaders/Main.frag");
+    g_renderer.shaders[+Shader::Voxel_Rast] = new ShaderProgram("Source/Shaders/Voxel_Rast.vert",   "Source/Shaders/Voxel_Rast.frag");
+    g_renderer.shaders[+Shader::Voxel]      = new ShaderProgram("Source/Shaders/Voxel.vert",        "Source/Shaders/Voxel.frag");
+    g_renderer.shaders[+Shader::Cube]       = new ShaderProgram("Source/Shaders/Cube.vert",         "Source/Shaders/Cube.frag");
 
     g_renderer.voxel_rast_ib = new IndexBuffer();
     FillIndexBuffer(g_renderer.voxel_rast_ib);

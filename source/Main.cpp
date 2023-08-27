@@ -19,12 +19,14 @@
 #include "Input.h"
 #include "WinInterop_File.h"
 #include "Vox.h"
+#include "Raycast.h"
+#include "Rendering_Cube.h"
 
 #include <unordered_map>
 #include <vector>
 //#include <algorithm>
 
-#define RASTERIZED_RENDERING 0
+#define RASTERIZED_RENDERING 1
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -168,11 +170,11 @@ int main(int argc, char* argv[])
 
     g_renderer.shaders[+Shader::Main]->UseShader();
 
-    float   camera_dis      = 2.0f;
-    float   camera_yaw      = 0.0f;
-    float   camera_pitch    = 0.0f;
-    Vec3    camera_velocity = { };
-    Vec3    camera_look_at  = { };
+    float   camera_dis              = 2.0f;
+    float   camera_yaw              = 0.0f;
+    float   camera_pitch            = pi / 4;
+    Vec3    camera_velocity         = { };
+    Vec3    camera_look_at_target   = { };
 
 
 
@@ -291,6 +293,8 @@ int main(int argc, char* argv[])
                                 {
                                     playerInput.mouse.pDelta.x = SDLEvent.motion.xrel;
                                     playerInput.mouse.pDelta.y = SDLEvent.motion.yrel;
+                                    playerInput.mouse.pos.x = SDLEvent.motion.x;
+                                    playerInput.mouse.pos.y = g_renderer.size.y - SDLEvent.motion.y;
 
                                     //SDL_WarpMouseInWindow(g_renderer.SDL_Context, g_renderer.size.x / 2, g_renderer.size.y / 2);
                                     //playerInput.mouse.pos.x = SDLEvent.motion.x;
@@ -298,7 +302,6 @@ int main(int argc, char* argv[])
                                     //playerInput.mouse.pos.x = g_renderer.size.x / 2;
                                     //playerInput.mouse.pos.y = g_renderer.size.y / 2;
                                 }
-
                             }
                         }
                         break;
@@ -332,6 +335,7 @@ int main(int argc, char* argv[])
                             g_renderer.hasAttention = true;
                             playerInput.mouse.pDelta = {};
                             SDL_GetMouseState(&playerInput.mouse.pos.x, &playerInput.mouse.pos.y);
+                            playerInput.mouse.pos.y = g_renderer.size.y - playerInput.mouse.pos.y;
                             if (g_cursorEngaged)
                             {
                                 SDL_CaptureMouse(SDL_TRUE);
@@ -386,24 +390,16 @@ int main(int argc, char* argv[])
             {
                 camera_yaw -= ((float(playerInput.mouse.pDelta.x) / float(g_renderer.size.x)) * (tau));
                 camera_pitch += ((float(playerInput.mouse.pDelta.y) / float(g_renderer.size.y)) * (tau));
-                float quater_pi = pi / 4;
-                float offset = 0.1f;
-                camera_pitch = Clamp(camera_pitch, (-quater_pi) * 3 + offset, quater_pi - offset);
+                float half_pi = pi / 2;
+                float offset = 0.01f;
+                camera_pitch = Clamp(camera_pitch, (-half_pi) + offset, half_pi - offset);
             }
             camera_dis = Max(1.0f, camera_dis - ((playerInput.mouse.wheelInstant.y / 4) * (0.3f * camera_dis)));
 
-            Mat4 camera_world_swivel;
-            Mat4 trans;
-            Mat4 rot;
-            gb_mat4_identity(&camera_world_swivel);
-            gb_mat4_from_quat(&rot, gb_quat_euler_angles(camera_pitch, camera_yaw, 0.0f));
-            Vec3 camera_position = { 0, camera_dis, -camera_dis };
-            gb_mat4_translate(&trans, camera_position);
-            camera_world_swivel = rot * trans;
-            Vec3 camera_pos_swivel = camera_world_swivel.col[3].xyz;
-
-            Mat4 pre_movement;
-            gb_mat4_look_at(&pre_movement, camera_pos_swivel, camera_look_at, { 0,1,0 });
+            Quat camera_rotation = gb_quat_euler_angles(camera_pitch, camera_yaw, 0.0f);
+            Vec3 camera_3d_distance = { 0, 0, -camera_dis };
+            Vec3 camera_position_swivel;
+            gb_quat_rotate_vec3(&camera_position_swivel, camera_rotation, camera_3d_distance);
 
             //travel distance
             Vec3 wanted_direction = {   playerInput.keyStates[SDLK_a].down ? 1.0f : (playerInput.keyStates[SDLK_d].down ? -1.0f : 0.0f),
@@ -411,23 +407,27 @@ int main(int argc, char* argv[])
                                         playerInput.keyStates[SDLK_w].down ? 1.0f : (playerInput.keyStates[SDLK_s].down ? -1.0f : 0.0f) };
 
             float speed = 10.0f;
+            if (playerInput.keyStates[SDLK_LSHIFT].down)
+                speed *= 10.0f;
+            if (playerInput.keyStates[SDLK_LCTRL].down)
+                speed /= 10.0f;
             Mat4 yaw_only_rotation;
             gb_mat4_from_quat(&yaw_only_rotation, gb_quat_euler_angles(0.0f, camera_yaw, 0.0f));
             Vec3 front = (yaw_only_rotation * GetVec4(wanted_direction, 0)).xyz;
             gb_vec3_norm0(&front, front);
             Vec3 targetVelocity = front * speed;
             camera_velocity = Converge(camera_velocity, targetVelocity, 16.0f, deltaTime);
-            camera_look_at += camera_velocity * deltaTime;
+            camera_look_at_target += camera_velocity * deltaTime;
 
 
-            Mat4 perspective;
-            gb_mat4_perspective(&perspective, 3.14f / 2, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
-            Mat4 view;
-            Vec3 camera_pos_world = camera_pos_swivel + camera_look_at;
-            gb_mat4_look_at(&view, camera_pos_world, camera_look_at, { 0,1,0 });
+            Mat4 projection_from_view;
+            gb_mat4_perspective(&projection_from_view, tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
+            Mat4 view_from_world;
+            Vec3 camera_pos_world = camera_position_swivel + camera_look_at_target;
+            gb_mat4_look_at(&view_from_world, camera_pos_world, camera_look_at_target, { 0,1,0 });
 
 
-
+            
             if (showIMGUI)
             {
                 ZoneScopedN("ImGui Update");
@@ -463,12 +463,12 @@ int main(int argc, char* argv[])
                             ImGui::TableSetupColumn("Z");
                             ImGui::TableHeadersRow();
 
-                            GenericImGuiTable("Camera_dis",     "%+08.2f", &camera_dis, 1);
-                            GenericImGuiTable("Camera_yaw",     "%+08.2f", &camera_yaw,     1);
-                            GenericImGuiTable("Camera_pitch",   "%+08.2f", &camera_pitch,   1);
-                            GenericImGuiTable("Camera_swivel",  "%+08.2f", camera_pos_swivel.e);
-                            GenericImGuiTable("Camera_look_at", "%+08.2f", camera_look_at.e);
-                            GenericImGuiTable("Camera_world",   "%+08.2f", camera_pos_world.e);
+                            GenericImGuiTable("Camera_dis",     "%+08.2f",  &camera_dis, 1);
+                            GenericImGuiTable("Camera_yaw",     "%+08.2f",  &camera_yaw,     1);
+                            GenericImGuiTable("Camera_pitch",   "%+08.2f",  &camera_pitch,   1);
+                            GenericImGuiTable("Camera_swivel",  "%+08.2f",  camera_position_swivel.e);
+                            GenericImGuiTable("Camera_look_at", "%+08.2f",  camera_look_at_target.e);
+                            GenericImGuiTable("Camera_world",   "%+08.2f",  camera_pos_world.e);
 
                             ImGui::EndTable();
                         }
@@ -500,12 +500,27 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
                 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
 
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view",        1, false, view.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_projection_from_view", 1, false, projection_from_view.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_world",      1, false, view_from_world.e);
 
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             }
 #else
+
+#if 1
+            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &projection_from_view, &view_from_world);
+            AABB aabb = {
+                .min = {},
+                .max = Vec3IntToVec3(voxels.size),
+            };
+            RaycastResult rr = RayVsAABB(ray, aabb);
+            if (rr.success)
+            {
+                AddCubeToRender(rr.p, transPurple, 2);
+            }
+#endif
+
+
             //Rasterized voxel rendering
             {
                 //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -525,10 +540,14 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 3);
                 glVertexAttribIPointer(3, 1, GL_UNSIGNED_BYTE,  sizeof(Vertex_Voxel), (void*)offsetof(Vertex_Voxel, ao));
 
-                g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_perspective", 1, false, perspective.e);
-                g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_view",        1, false, view.e);
+                g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_projection_from_view", 1, false, projection_from_view.e);
+                g_renderer.shaders[+Shader::Voxel_Rast]->UpdateUniformMat4("u_view_from_world",        1, false, view_from_world.e);
 
                 glDrawElements(GL_TRIANGLES, vox_mesh_index_count, GL_UNSIGNED_INT, 0);
+            }
+            {
+                RenderOpaqueCubes(      projection_from_view, view_from_world);
+                RenderTransparentCubes( projection_from_view, view_from_world);
             }
 #endif
 

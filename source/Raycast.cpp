@@ -1,58 +1,63 @@
 #include "Raycast.h"
 #include "Misc.h"
+#include "Vox.h"
 
-////http://www.cs.yorku.ca/~amana/research/grid.pdf
-//RaycastResult LineCast(const Ray& ray, float length)
-//{
-//    RaycastResult result = {};
-//
-//    Vec3 p = Vec3IntToVec3(ToGame((WorldPos(ray.origin))).p);
-//    Vec3 step = {};
-//    step.x = ray.direction.x >= 0 ? 1.0f : -1.0f;
-//    step.y = ray.direction.y >= 0 ? 1.0f : -1.0f;
-//    step.z = ray.direction.z >= 0 ? 1.0f : -1.0f;
-//    Vec3 pClose = Vec3IntToVec3(ToGame((WorldPos(Round(ray.origin + (step / 2))))).p);
-//    Vec3 tMax = Abs((pClose - ray.origin) / ray.direction);
-//    Vec3 tDelta = Abs(1.0f / ray.direction);
-//    
-//    BlockType blockType = BlockType::Empty;
-//    while (blockType == BlockType::Empty) {
-//        if (Distance(p, ray.origin) > length)
-//            break;
-//
-//        result.normal = {};
-//        if (tMax.x < tMax.y && tMax.x < tMax.z)
-//        {
-//            p.x += step.x;
-//            tMax.x += tDelta.x;
-//            result.normal.x = float(-1.0) * step.x;
-//        }
-//        else if (tMax.y < tMax.x && tMax.y < tMax.z)
-//        {
-//            p.y += step.y;
-//            tMax.y += tDelta.y;
-//            result.normal.y = float(-1.0) * step.y;
-//        }
-//        else 
-//        {
-//            p.z += step.z;
-//            tMax.z += tDelta.z;
-//            result.normal.z = float(-1.0) * step.z;
-//        }
-//
-//        result.p.p = Vec3ToVec3Int(p);
-//        g_chunks->GetBlock(blockType, result.p);
-//    }
-//    result.distance = Distance(ray.origin, p);
-//    result.success = blockType != BlockType::Empty;
-//    return result;
-//}
+//http://www.cs.yorku.ca/~amana/research/grid.pdf
+RaycastResult LineCast(const Ray& ray, VoxData voxels, float length)
+{
+    assert(length >= 0.0f);
+    assert(length <= 10000.0f);
+    RaycastResult result = {};
 
-//RaycastResult RayVsChunk(const Ray& ray, float length)
-//{
-//    RaycastResult result = LineCast(ray, length);
-//    return result;
-//}
+    Vec3 p = ray.origin;
+    Vec3 step = {};
+    step.x = ray.direction.x >= 0 ? 1.0f : -1.0f;
+    step.y = ray.direction.y >= 0 ? 1.0f : -1.0f;
+    step.z = ray.direction.z >= 0 ? 1.0f : -1.0f;
+    Vec3 pClose = ray.origin + (step / 2);
+    Vec3 tMax = Abs((pClose - ray.origin) / ray.direction);
+    Vec3 tDelta = Abs(1.0f / ray.direction);
+    
+    u32 index = 0;
+    while (!index) 
+    {
+        if (Distance(p, ray.origin) > length)
+            break;
+
+        result.normal = {};
+        if (tMax.x < tMax.y && tMax.x < tMax.z)
+        {
+            p.x += step.x;
+            tMax.x += tDelta.x;
+            result.normal.x = float(-1.0) * step.x;
+        }
+        else if (tMax.y < tMax.x && tMax.y < tMax.z)
+        {
+            p.y += step.y;
+            tMax.y += tDelta.y;
+            result.normal.y = float(-1.0) * step.y;
+        }
+        else 
+        {
+            p.z += step.z;
+            tMax.z += tDelta.z;
+            result.normal.z = float(-1.0) * step.z;
+        }
+
+        Vec3Int voxel_p = Vec3ToVec3Int(p);
+        result.p = p;  //Vec3IntToVec3(voxel_p);
+        assert(voxels.color_indices.size() == 1);
+        if (voxel_p.x > voxels.size.x || voxel_p.y > voxels.size.y || voxel_p.z > voxels.size.z)
+            break;
+        if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
+            continue;
+        index = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
+        //g_chunks->GetBlock(blockType, result.p);
+    }
+    result.distance_mag = Distance(ray.origin, p);
+    result.success      = index;
+    return result;
+}
 
 RaycastResult RayVsAABB(const Ray& ray, const AABB& box)
 {

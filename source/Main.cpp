@@ -516,7 +516,11 @@ int main(int argc, char* argv[])
             RaycastResult rr = RayVsAABB(ray, aabb);
             if (rr.success)
             {
-                AddCubeToRender(rr.p, transPurple, 2);
+                RaycastResult lc = LineCast(ray, voxels, 1000.0f);
+                if (lc.success)
+                {
+                    AddCubeToRender(lc.p, transPurple, 2);
+                }
             }
 #endif
 

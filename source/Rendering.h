@@ -35,12 +35,14 @@ public:
     void UseShader();
     void UpdateUniformMat4(const char* name, GLsizei count, GLboolean transpose, const GLfloat* value);
     void UpdateUniformVec4(const char* name, GLsizei count, const GLfloat* value);
+    void UpdateUniformVec3(const char* name, const Vec3& value);
     void UpdateUniformVec3(const char* name, GLsizei count, const GLfloat* value);
     void UpdateUniformVec2(const char* name, GLsizei count, const GLfloat* value);
     void UpdateUniformFloat(const char* name, GLfloat value);
     void UpdateUniformFloatStream(const char* name, GLsizei count, const GLfloat* value);
     void UpdateUniformInt2(const char* name, Vec2Int values);
     void UpdateUniformInt2(const char* name, GLint value1, GLint value2);
+    void UpdateUniformInt3(const char* name, Vec3Int v);
     void UpdateUniformUint8(const char* name, GLuint value);
     void UpdateUniformUintStream(const char* name, GLsizei count, GLuint* values);
 

@@ -76,8 +76,13 @@ void InitializeVideo()
         SDL_Rect screenSize = {};
         SDL_GetDisplayBounds(0, &screenSize);
         float displayRatio = 16 / 9.0f;
+#if 0
+        g_renderer.size.x = 160;
+        g_renderer.size.y = 90;
+#else
         g_renderer.size.x = screenSize.w / 2;
         g_renderer.size.y = Clamp<int>(int(g_renderer.size.x / displayRatio), 50, screenSize.h);
+#endif
         g_renderer.pos.x = g_renderer.size.x / 2;
         g_renderer.pos.y = g_renderer.size.y / 2;
     }
@@ -421,6 +426,14 @@ void ShaderProgram::UpdateUniformVec4(const char* name, GLsizei count, const GLf
 #endif
 }
 
+void ShaderProgram::UpdateUniformVec3(const char* name, const Vec3& value)
+{
+    GLint loc = glGetUniformLocation(m_handle, name);
+    glUniform3f(loc, value.x, value.y, value.z);
+#ifdef _DEBUGPRINT
+    DebugPrint("Shader Uniform Updated %s\n", name);
+#endif
+}
 void ShaderProgram::UpdateUniformVec3(const char* name, GLsizei count, const GLfloat* value)
 {
     GLint loc = glGetUniformLocation(m_handle, name);
@@ -463,6 +476,16 @@ void ShaderProgram::UpdateUniformInt2(const char* name, GLint value1, GLint valu
     GLint loc = glGetUniformLocation(m_handle, name);
     //glUniform1f(loc, value);
     glUniform2i(loc, value1, value2);
+#ifdef _DEBUGPRINT
+    DebugPrint("Shader Uniform Updated %s\n", name);
+#endif
+}
+
+void ShaderProgram::UpdateUniformInt3(const char* name, Vec3Int v)
+{
+    GLint loc = glGetUniformLocation(m_handle, name);
+    //glUniform1f(loc, value);
+    glUniform3i(loc, v.x, v.y, v.z);
 #ifdef _DEBUGPRINT
     DebugPrint("Shader Uniform Updated %s\n", name);
 #endif

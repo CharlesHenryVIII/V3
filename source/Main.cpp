@@ -26,7 +26,7 @@
 #include <vector>
 //#include <algorithm>
 
-#define RASTERIZED_RENDERING 1
+#define RASTERIZED_RENDERING 0
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -105,8 +105,6 @@ int main(int argc, char* argv[])
     ImGuiIO& imGuiIO = ImGui::GetIO();
     bool g_cursorEngaged = true;
     CommandHandler playerInput;
-    float camera_distance = 1.0f;
-    float camera_rotation = 0.0f;
 
     float p = 0.5f;
     Vertex vertices[] = {
@@ -426,6 +424,11 @@ int main(int argc, char* argv[])
             Vec3 camera_pos_world = camera_position_swivel + camera_look_at_target;
             gb_mat4_look_at(&view_from_world, camera_pos_world, camera_look_at_target, { 0,1,0 });
 
+            Mat4 view_from_projection;
+            Mat4 world_from_view;
+            gb_mat4_inverse(&view_from_projection,  &projection_from_view);
+            gb_mat4_inverse(&world_from_view,       &view_from_world);
+
 
             
             if (showIMGUI)
@@ -464,11 +467,12 @@ int main(int argc, char* argv[])
                             ImGui::TableHeadersRow();
 
                             GenericImGuiTable("Camera_dis",     "%+08.2f",  &camera_dis, 1);
-                            GenericImGuiTable("Camera_yaw",     "%+08.2f",  &camera_yaw,     1);
-                            GenericImGuiTable("Camera_pitch",   "%+08.2f",  &camera_pitch,   1);
+                            GenericImGuiTable("Camera_yaw",     "%+08.2f",  &camera_yaw, 1);
+                            GenericImGuiTable("Camera_pitch",   "%+08.2f",  &camera_pitch, 1);
                             GenericImGuiTable("Camera_swivel",  "%+08.2f",  camera_position_swivel.e);
                             GenericImGuiTable("Camera_look_at", "%+08.2f",  camera_look_at_target.e);
                             GenericImGuiTable("Camera_world",   "%+08.2f",  camera_pos_world.e);
+                            GenericImGuiTable("delta_time",     "%+08.2f",  &deltaTime, 1);
 
                             ImGui::EndTable();
                         }
@@ -500,15 +504,18 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
                 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
 
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_projection_from_view", 1, false, projection_from_view.e);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_world",      1, false, view_from_world.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_projection", 1, false, view_from_projection.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_world_from_view",      1, false, world_from_view.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt2("u_screen_size",          g_renderer.size);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt3("u_voxel_size",           voxels.size);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformVec3("u_camera_position",      camera_pos_world);
 
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             }
 #else
 
 #if 1
-            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &projection_from_view, &view_from_world);
+            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &view_from_projection, &world_from_view);
             AABB aabb = {
                 .min = {},
                 .max = Vec3IntToVec3(voxels.size),
@@ -516,7 +523,8 @@ int main(int argc, char* argv[])
             RaycastResult rr = RayVsAABB(ray, aabb);
             if (rr.success)
             {
-                RaycastResult lc = LineCast(ray, voxels, 1000.0f);
+                //RaycastResult lc = LineCast(ray, voxels, 1000.0f);
+                RaycastResult lc = LineCast(ray, voxels, INFINITY);
                 if (lc.success)
                 {
                     AddCubeToRender(lc.p, transPurple, 2);

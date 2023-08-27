@@ -6,7 +6,6 @@
 RaycastResult LineCast(const Ray& ray, VoxData voxels, float length)
 {
     assert(length >= 0.0f);
-    assert(length <= 10000.0f);
     RaycastResult result = {};
 
     Vec3 p = ray.origin;
@@ -132,8 +131,10 @@ RaycastResult RayVsAABB(const Ray& ray, const AABB& box)
     return r;
 }
 
-Ray MouseToRaycast(const Vec2Int& pixel_pos, const Vec2Int& screen_size, const Vec3& camera_pos, Mat4* projection_from_view, Mat4* view_from_world)
+Ray MouseToRaycast(const Vec2Int& pixel_pos, const Vec2Int& screen_size, const Vec3& camera_pos, Mat4* view_from_projection, Mat4* world_from_view)
 {
+    VALIDATE_V(view_from_projection,    {});
+    VALIDATE_V(world_from_view,         {});
     //To Normalized Device Coordinates
     //The top left of the monitor is the origin: { -1, -1 }
     //The bot right of the monitor is { 1, 1 }
@@ -144,15 +145,11 @@ Ray MouseToRaycast(const Vec2Int& pixel_pos, const Vec2Int& screen_size, const V
     Vec4 ray_clip = { ray_nds.x, ray_nds.y, +1.0, 1.0 }; // z may need to be either positive or negative
 
     //From Clip to View
-    Mat4 view_from_projection;
-    gb_mat4_inverse(&view_from_projection, projection_from_view);
-    Vec4 ray_view = view_from_projection * ray_clip;
+    Vec4 ray_view = *view_from_projection * ray_clip;
     ray_view = { ray_view.x, ray_view.y, -1.0, 0.0 };
 
     //From View to World
-    Mat4 world_from_view;
-    gb_mat4_inverse(&world_from_view, view_from_world);
-    Vec3 ray_world = (world_from_view * ray_view).xyz;
+    Vec3 ray_world = (*world_from_view * ray_view).xyz;
 
     //Normalize
     Vec3 ray_world_n;

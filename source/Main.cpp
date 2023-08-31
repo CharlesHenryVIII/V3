@@ -26,7 +26,7 @@
 #include <vector>
 //#include <algorithm>
 
-#define RASTERIZED_RENDERING 1
+#define RASTERIZED_RENDERING 0
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -188,7 +188,7 @@ int main(int argc, char* argv[])
     for (i32 i = 0; i < arrsize(vertices); i++)
     {
         voxel_box_vertices[i] = vertices[i].p + p;
-        voxel_box_vertices[i] = HadamardProduct(voxel_box_vertices[i], Vec3IntToVec3(voxels.size));
+        voxel_box_vertices[i] = HadamardProduct(voxel_box_vertices[i], ToVec3(voxels.size));
     }
     g_renderer.voxel_box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices));
     {
@@ -440,7 +440,7 @@ int main(int argc, char* argv[])
             Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &view_from_projection, &world_from_view);
             AABB aabb = {
                 .min = {},
-                .max = Vec3IntToVec3(voxels.size),
+                .max = ToVec3(voxels.size),
             };
             RaycastResult rr = RayVsAABB(ray, aabb);
             RaycastResult lc = {};
@@ -450,10 +450,11 @@ int main(int argc, char* argv[])
                 Ray linecast_ray = { rr.p, ray.direction };
                 //RaycastResult lc = LineCast(ray, voxels, INFINITY);
                 //lc = LineCast(ray, voxels, 1000.0f);
-                lc = VoxelLineCast_TESTING(ray, voxels, 1000.0f);
+                lc = Linecast(ray, voxels, 1000.0f);
                 if (lc.success)
                 {
-                    AddCubeToRender(lc.p, transPurple, 1.1f);
+                    //AddCubeToRender(lc.p, transPurple, 1.1f);
+                    AddCubeToRender(lc.p, transPurple, 0.1f);
                 }
 #else
                 AddCubeToRender(rr.p, transPurple, 2);
@@ -528,6 +529,7 @@ int main(int argc, char* argv[])
             {
                 ZoneScopedN("Voxel Render");
                 
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 glDisable(GL_CULL_FACE);
                 static_assert(GL_TEXTURE1 == GL_TEXTURE0 + 1);
                 static_assert(GL_TEXTURE2 == GL_TEXTURE0 + 2);
@@ -542,8 +544,13 @@ int main(int argc, char* argv[])
                 g_renderer.voxel_vb->Bind();
 #endif
 
+#if 0
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+#else
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
+#endif
 
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
                 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
@@ -558,6 +565,13 @@ int main(int argc, char* argv[])
 
                 glDrawElements(GL_TRIANGLES, 6 * 6, GL_UNSIGNED_INT, 0);
                 glEnable(GL_CULL_FACE);
+            }
+            {
+                Vec3 voxels_size = ToVec3(voxels.size);
+                AddCubeToRender(voxels_size / 2.0f, transRed, voxels_size);
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                RenderOpaqueCubes(      projection_from_view, view_from_world);
+                RenderTransparentCubes( projection_from_view, view_from_world);
             }
 #else
 

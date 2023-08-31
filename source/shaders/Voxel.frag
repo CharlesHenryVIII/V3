@@ -70,63 +70,72 @@ Ray PixelToRay(ivec2 pixel)
 }
 
 struct RaycastResult {
-    uint voxel_index;
+    uint color_index;
     vec3 p;
     float distance_mag;
     vec3 normal;
 };
 
-RaycastResult LineCast(const Ray ray, float ray_length)
+RaycastResult Linecast(const Ray ray, float ray_length)
 {
     RaycastResult result;
-    result.voxel_index  = 0;
+    result.color_index  = 0;
     result.p            = vec3(0);
     result.distance_mag = 0;
     result.normal       = vec3(0);
 
+
     vec3 p = ray.origin;
-    vec3 line_step = vec3(0);
-    line_step.x = ray.direction.x >= 0 ? 1.0 : -1.0;
-    line_step.y = ray.direction.y >= 0 ? 1.0 : -1.0;
-    line_step.z = ray.direction.z >= 0 ? 1.0 : -1.0;
-    vec3 pClose = ray.origin + (line_step / 2);
+    vec3 step;
+    step.x = ray.direction.x >= 0 ? 1.0 : -1.0;
+    step.y = ray.direction.y >= 0 ? 1.0 : -1.0;
+    step.z = ray.direction.z >= 0 ? 1.0 : -1.0;
+    const vec3 pClose = floor((round(ray.origin + (step / 2))));
     vec3 tMax = abs((pClose - ray.origin) / ray.direction);
-    vec3 tDelta = abs(1.0 / ray.direction);
+    const vec3 tDelta = abs(1.0 / ray.direction);
+    ivec3 voxel_p;
+
     
-    while (result.voxel_index == 0)
+    while (result.color_index == 0)
     {
         if (distance(p, ray.origin) > ray_length)
-            break;
+        {
+            return result;
+        }
 
         result.normal = vec3(0);
         if (tMax.x < tMax.y && tMax.x < tMax.z)
         {
-            p.x += line_step.x;
+            p.x += step.x;
             tMax.x += tDelta.x;
-            result.normal.x = float(-1.0) * line_step.x;
+            result.normal.x = -step.x;
         }
         else if (tMax.y < tMax.x && tMax.y < tMax.z)
         {
-            p.y += line_step.y;
+            p.y += step.y;
             tMax.y += tDelta.y;
-            result.normal.y = float(-1.0) * line_step.y;
+            result.normal.y = -step.y;
         }
         else 
         {
-            p.z += line_step.z;
+            p.z += step.z;
             tMax.z += tDelta.z;
-            result.normal.z = float(-1.0) * line_step.z;
+            result.normal.z = -step.z;
         }
 
-        //ivec3 voxel_p = ivec3(trunc(p).xyz);
-        ivec3 voxel_p = ivec3(p);
-        result.p = p;  //Vec3IntToVec3(voxel_p);
-        if (voxel_p.x > u_voxel_size.x || voxel_p.y > u_voxel_size.y || voxel_p.z > u_voxel_size.z)
-            break;
+        voxel_p = ivec3(floor(p));
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
             continue;
-        result.voxel_index = GetIndexFromGameVoxelPosition(voxel_p);
+        if (voxel_p.x >= u_voxel_size.x || voxel_p.y >= u_voxel_size.y || voxel_p.z >= u_voxel_size.z)
+            continue;
+        result.color_index = GetIndexFromGameVoxelPosition(voxel_p);
     }
+    
+    const uint comp = (result.normal.x != 0.0 ? 0 : (result.normal.y != 0.0 ? 1 : 2));
+    const float voxel = ray.direction[comp] < 0 ? float(voxel_p[comp]) + 1.0f : float(voxel_p[comp]);
+    const float t = (voxel - ray.origin[comp]) / ray.direction[comp];
+    result.p = ray.origin + ray.direction * t;
+
     result.distance_mag = distance(ray.origin, p);
     return result;
 }
@@ -140,7 +149,7 @@ struct AABB {
 RaycastResult RayVsAABB(const Ray ray, const AABB box)
 {
     RaycastResult r;
-    r.voxel_index  = 0;
+    r.color_index  = 0;
     r.p            = vec3(0);
     r.distance_mag = 0;
     r.normal       = vec3(0);
@@ -206,7 +215,7 @@ RaycastResult RayVsAABB(const Ray ray, const AABB box)
     }
     r.normal = normals[closestFace];
 
-    r.voxel_index = 1;
+    r.color_index = 1;
     return r;
 }
 
@@ -215,20 +224,35 @@ void main()
 
     Ray ray = PixelToRay(ivec2(gl_FragCoord.xy));
 
+#if 1
+
+    RaycastResult ray_voxel = Linecast(ray, 1000.0);
+    if (ray_voxel.color_index != 0)
+    {
+        vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index), 0);
+        color.xyz = voxel_color.xyz;
+        color.a = 1.0;
+        //gl_FragDepth = 0;
+    }
+    else
+    {
+        discard;
+    }
+
+
+
+
+#else
     AABB box = AABB(vec3(0), vec3(u_voxel_size.x, u_voxel_size.y, u_voxel_size.z ));
 
     RaycastResult ray_aabb = RayVsAABB(ray, box);
-    if (ray_aabb.voxel_index != 0)
+    if (ray_aabb.color_index != 0)
     {
         ray.origin = ray_aabb.p;
-#if 1
-        RaycastResult ray_voxel = LineCast(ray, 1000.0);
-#else
-        RaycastResult ray_voxel = LineCast(ray, FLT_INF);
-#endif
-        if (ray_voxel.voxel_index != 0)
+        RaycastResult ray_voxel = Linecast(ray, 1000.0);
+        if (ray_voxel.color_index != 0)
         {
-            vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.voxel_index), 0);
+            vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index), 0);
             color.xyz = voxel_color.xyz;
             color.a = 1.0;
 
@@ -270,6 +294,7 @@ void main()
     {
         discard;
     }
+#endif
 
 
 

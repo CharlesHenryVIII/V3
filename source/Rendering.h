@@ -125,7 +125,7 @@ struct Renderer {
     //bool msaaEnabled = true;
     bool hasAttention;
     //i32 maxMSAASamples = 1;
-    i32 swapInterval = SwapInterval_Immediate;
+    i32 swapInterval = SwapInterval_VSync;
     //float maxAnisotropic;
     //float currentAnisotropic = 1.0f;
     Vec2Int size;

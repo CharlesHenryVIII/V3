@@ -808,7 +808,7 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
                     for (u32 face_i = 0; face_i < +Face::Count; face_i++)
                     {
                         //voxels.e[x][y][z];
-                        Vec3Int vf = Vec3ToVec3Int(faceNormals[face_i]);
+                        Vec3Int vf = ToVec3Int(faceNormals[face_i]);
                         Vec3Int checking_block_pos;
                         checking_block_pos = this_voxel_pos + vf;
                         //checkingBlockPos.x = x + vf.x;
@@ -823,7 +823,7 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
                             for (i32 i = 0; i < 4; i++)
                             {
                                 Vertex_Voxel v;
-                                v.p = Vec3IntToVec3(this_voxel_pos) + cubeVertices[face_i].e[i];
+                                v.p = ToVec3(this_voxel_pos) + cubeVertices[face_i].e[i];
                                 v.rgba = voxel_data.color_palette[this_voxel_i];
                                 v.n = face_i;
 

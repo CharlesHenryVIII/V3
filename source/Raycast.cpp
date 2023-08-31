@@ -2,32 +2,32 @@
 #include "Misc.h"
 #include "Vox.h"
 
-Vec3Int GetVoxelPosFromRayPos(Vec3& p, const Vec3& ray_direction)
-{
-#if 1
-    const float epsilon = 0.00001f;
-    {
-        float rounded = roundf(p.x);
-        if (p.x - rounded <= epsilon)
-            p.x = rounded;
-    }
-    {
-        float rounded = roundf(p.y);
-        if (p.y - rounded <= epsilon)
-            p.y = rounded;
-    }
-    {
-        float rounded = roundf(p.z);
-        if (p.z - rounded <= epsilon)
-            p.z = rounded;
-    }
-#endif
-    Vec3Int voxel_p = Vec3ToVec3Int(Floor(p));
-    voxel_p.x = (ray_direction.x < 0) ? voxel_p.x - 1 : voxel_p.x;
-    voxel_p.y = (ray_direction.y < 0) ? voxel_p.y - 1 : voxel_p.y;
-    voxel_p.z = (ray_direction.z < 0) ? voxel_p.z - 1 : voxel_p.z;
-    return voxel_p;
-}
+//Vec3Int GetVoxelPosFromRayPos(Vec3& p, const Vec3& ray_direction)
+//{
+//#if 1
+//    const float epsilon = 0.00001f;
+//    {
+//        float rounded = roundf(p.x);
+//        if (p.x - rounded <= epsilon)
+//            p.x = rounded;
+//    }
+//    {
+//        float rounded = roundf(p.y);
+//        if (p.y - rounded <= epsilon)
+//            p.y = rounded;
+//    }
+//    {
+//        float rounded = roundf(p.z);
+//        if (p.z - rounded <= epsilon)
+//            p.z = rounded;
+//    }
+//#endif
+//    Vec3Int voxel_p = Vec3ToVec3Int(Floor(p));
+//    voxel_p.x = (ray_direction.x < 0) ? voxel_p.x - 1 : voxel_p.x;
+//    voxel_p.y = (ray_direction.y < 0) ? voxel_p.y - 1 : voxel_p.y;
+//    voxel_p.z = (ray_direction.z < 0) ? voxel_p.z - 1 : voxel_p.z;
+//    return voxel_p;
+//}
 
 //RaycastResult LineCast(const Ray& ray, VoxData voxels, float length)
 //{
@@ -140,8 +140,8 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
     Vec3Int voxel_p;
 
     
-    u32 index = 0;
-    while (!index) 
+    //u32 index = 0;
+    while (!result.success) 
     {
         if (Distance(p, ray.origin) > length)
             return result;
@@ -166,14 +166,14 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
             result.normal.z = -step.z;
         }
 
-        voxel_p = Vec3ToVec3Int(Floor(p));
+        voxel_p = ToVec3Int(Floor(p));
         assert(voxels.color_indices.size() == 1);
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
             continue;
         if (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z)
             continue;
         
-        index = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
+        result.success = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
 
     }
     
@@ -183,7 +183,7 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
     result.p = ray.origin + ray.direction * t;
 
     result.distance_mag = Distance(ray.origin, p);
-    result.success      = index;
+    //result.success      = index;
     return result;
 }
 
@@ -229,7 +229,7 @@ RaycastResult VoxelLinecast(const Ray& ray, VoxData voxels, float length)
             result.normal.z = -step.z;
         }
 
-        Vec3Int voxel_p = Vec3ToVec3Int(Floor(p));
+        Vec3Int voxel_p = ToVec3Int(Floor(p));
         assert(voxels.color_indices.size() == 1);
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
             continue;
@@ -238,7 +238,7 @@ RaycastResult VoxelLinecast(const Ray& ray, VoxData voxels, float length)
         
         index = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
         volatile u32 test = 0;
-        result.p = Vec3IntToVec3(voxel_p);
+        result.p = ToVec3(voxel_p);
     }
     result.distance_mag = Distance(ray.origin, p);
     result.success      = index;

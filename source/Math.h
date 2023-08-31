@@ -837,26 +837,23 @@ MATH_PREFIX float RandomFloat(const float min, const float max)
     return min + (max - min) * (rand() / float(RAND_MAX));
 }
 
-
-MATH_PREFIX Vec3Int Vec3ToVec3Int(Vec3 a)
+MATH_PREFIX Vec3Int ToVec3Int(Vec3 a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(a.z) };
 }
-
-MATH_PREFIX Vec3 Vec3IntToVec3(Vec3Int a)
+MATH_PREFIX Vec3    ToVec3(Vec3Int a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z) };
 }
-
-MATH_PREFIX Vec2Int Vec2ToVec2Int(Vec2 a)
+MATH_PREFIX Vec2Int ToVec2Int(Vec2 a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y) };
 }
-
-MATH_PREFIX Vec2 Vec2IntToVec2(Vec2Int a)
+MATH_PREFIX Vec2    ToVec2(Vec2Int a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y) };
 }
+
 //Multiplication of two vectors without adding each dimension to get the dot product
 MATH_PREFIX Vec3Int HadamardProduct(Vec3Int a, Vec3Int b)
 {

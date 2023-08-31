@@ -868,43 +868,6 @@ MATH_PREFIX Vec3 HadamardProduct(Vec3 a, Vec3 b)
     return { a.x * b.x, a.y * b.y, a.z * b.z };
 }
 
-struct ChunkPos {
-    Vec3Int p;
-};
-
-struct GamePos {
-    Vec3Int p;
-};
-
-struct WorldPos {
-    Vec3 p;
-    WorldPos() = default;
-    WorldPos(Vec3 a)
-    {
-        p.x = a.x;
-        p.y = a.y;
-        p.z = a.z;
-    }
-    WorldPos(float a, float b, float c)
-    {
-        p.x = a;
-        p.y = b;
-        p.z = c;
-    }
-};
-
-[[nodiscard]] WorldPos ToWorld(GamePos a);
-[[nodiscard]] WorldPos ToWorld(ChunkPos a);
-[[nodiscard]] GamePos ToGame(ChunkPos a);
-[[nodiscard]] GamePos ToGame(WorldPos a);
-[[nodiscard]] ChunkPos ToChunk(GamePos a);
-[[nodiscard]] ChunkPos ToChunk(WorldPos a);
-
-MATH_PREFIX WorldPos Floor(WorldPos v)
-{
-    return { floorf(v.p.x), floorf(v.p.y), floorf(v.p.z) };
-}
-
 struct Plane
 {
    float x,y,z,w;
@@ -1066,17 +1029,17 @@ const VertexFace smallCubeVertices[6] = {
 
 
 union Triangle {
-    struct { WorldPos p0, p1, p2; };
-    WorldPos e[3];
+    struct { Vec3 p0, p1, p2; };
+    Vec3 e[3];
 
     Vec3 Normal() const
     {
-        Vec3 r = Normalize(CrossProduct(p1.p - p0.p, p2.p - p0.p));
+        Vec3 r = Normalize(CrossProduct(p1 - p0, p2 - p0));
         return r;
     }
     Vec3 Center() const
     {
-        Vec3 r = (p0.p + p1.p + p2.p) / 3;
+        Vec3 r = (p0 + p1 + p2) / 3;
         return r;
     }
 };

@@ -65,12 +65,12 @@ project "V3"
 
 
     filter "configurations:Debug"
-        defines { "_DEBUG" } --, TRACY_ENABLE"}
+        defines { "_DEBUG" , "TRACY_ENABLE"}
         symbols  "On"
         optimize "Off"
 
     filter "configurations:Profile"
-        defines { "NDEBUG" } --, "TRACY_ENABLE"}
+        defines { "NDEBUG" , "TRACY_ENABLE"}
         symbols  "off"
         optimize "On"
 

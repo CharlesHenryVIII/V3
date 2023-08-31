@@ -71,6 +71,7 @@ void FillIndexBuffer(IndexBuffer* ib)
 
 void InitializeVideo()
 {
+    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
     SDL_Init(SDL_INIT_VIDEO);
     {
         SDL_Rect screenSize = {};
@@ -154,6 +155,7 @@ void InitializeVideo()
     g_renderer.voxel_rast_ib = new IndexBuffer();
     FillIndexBuffer(g_renderer.voxel_rast_ib);
     g_renderer.voxel_rast_vb = new VertexBuffer();
+    g_renderer.voxel_box_vb = new VertexBuffer();
 
     {
         g_renderer.voxel_ib = new IndexBuffer();
@@ -239,7 +241,10 @@ void RenderUpdate(Vec2Int windowSize, float deltaTime)
     CheckFrameBufferStatus();
     FrameBufferUpdate(windowSize);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, windowSize.x, windowSize.y);
+
+    Vec2Int drawable_size;
+    SDL_GL_GetDrawableSize(g_renderer.SDL_Context, &drawable_size.x, &drawable_size.y);
+    glViewport(0, 0, drawable_size.x, drawable_size.y);
 }
 
 ShaderProgram::~ShaderProgram()

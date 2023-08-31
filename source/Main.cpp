@@ -26,7 +26,7 @@
 #include <vector>
 //#include <algorithm>
 
-#define RASTERIZED_RENDERING 0
+#define RASTERIZED_RENDERING 1
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -184,6 +184,13 @@ int main(int argc, char* argv[])
     g_renderer.voxel_rast_vb->Upload(voxel_vertices.data(), voxel_vertices.size());
     assert(vox_mesh_index_count);
 
+    Vec3 voxel_box_vertices[arrsize(vertices)] = {};
+    for (i32 i = 0; i < arrsize(vertices); i++)
+    {
+        voxel_box_vertices[i] = vertices[i].p + p;
+        voxel_box_vertices[i] = HadamardProduct(voxel_box_vertices[i], Vec3IntToVec3(voxels.size));
+    }
+    g_renderer.voxel_box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices));
     {
         Texture::TextureParams voxel_indices_parameters = {
             .size = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
@@ -221,10 +228,10 @@ int main(int argc, char* argv[])
             ZoneScopedN("Frame Update:");
             totalTime = SDL_GetPerformanceCounter() / freq - startTime;
             float deltaTime = float(totalTime - previousTime);// / 10;
-            //previousTime = totalTime;
+            previousTime = totalTime;
             //TODO: Time stepping for simulation
-            if (deltaTime > (1.0f / 60.0f))
-                deltaTime = (1.0f / 60.0f);
+            //if (deltaTime > (1.0f / 60.0f))
+                //deltaTime = (1.0f / 60.0f);
 
             //NOTE(CSH): Force the game to run at 1fps
             //WARNING(CSH): BUGGY
@@ -429,7 +436,32 @@ int main(int argc, char* argv[])
             gb_mat4_inverse(&view_from_projection,  &projection_from_view);
             gb_mat4_inverse(&world_from_view,       &view_from_world);
 
+#if 1
+            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &view_from_projection, &world_from_view);
+            AABB aabb = {
+                .min = {},
+                .max = Vec3IntToVec3(voxels.size),
+            };
+            RaycastResult rr = RayVsAABB(ray, aabb);
+            RaycastResult lc = {};
+            if (rr.success)
+            {
+#if 1
+                Ray linecast_ray = { rr.p, ray.direction };
+                //RaycastResult lc = LineCast(ray, voxels, INFINITY);
+                //lc = LineCast(ray, voxels, 1000.0f);
+                lc = VoxelLineCast_TESTING(ray, voxels, 1000.0f);
+                if (lc.success)
+                {
+                    AddCubeToRender(lc.p, transPurple, 1.1f);
+                }
+#else
+                AddCubeToRender(rr.p, transPurple, 2);
+#endif
+            }
+#endif
 
+            //AddCubeToRender(aabb.Center(), transOrange, Vec3IntToVec3(voxels.size));
             
             if (showIMGUI)
             {
@@ -472,7 +504,11 @@ int main(int argc, char* argv[])
                             GenericImGuiTable("Camera_swivel",  "%+08.2f",  camera_position_swivel.e);
                             GenericImGuiTable("Camera_look_at", "%+08.2f",  camera_look_at_target.e);
                             GenericImGuiTable("Camera_world",   "%+08.2f",  camera_pos_world.e);
-                            GenericImGuiTable("delta_time",     "%+08.2f",  &deltaTime, 1);
+                            GenericImGuiTable("delta_time",     "%+08.8f",  &deltaTime, 1);
+                            GenericImGuiTable("hit_pos",        "%+08.2f",  lc.p.e);
+                            GenericImGuiTable("hit_suc",        "%i",       &lc.success, 1);
+                            GenericImGuiTable("mouse_pos",      "%i",       playerInput.mouse.pos.e, 2);
+                            GenericImGuiTable("ray_dir",        "%+08.2f",  ray.direction.e);
 
                             ImGui::EndTable();
                         }
@@ -490,47 +526,41 @@ int main(int argc, char* argv[])
 #if RASTERIZED_RENDERING == 0
             //Pathtraced voxel rendering
             {
+                ZoneScopedN("Voxel Render");
+                
+                glDisable(GL_CULL_FACE);
                 static_assert(GL_TEXTURE1 == GL_TEXTURE0 + 1);
                 static_assert(GL_TEXTURE2 == GL_TEXTURE0 + 2);
                 g_renderer.textures[Texture::Voxel_Indices]->Bind(GL_TEXTURE0);
                 g_renderer.textures[Texture::Color_Palette]->Bind(GL_TEXTURE1);
                 g_renderer.shaders[+Shader::Voxel]->UseShader();
+#if 1
+                g_renderer.voxel_rast_ib->Bind();
+                g_renderer.voxel_box_vb->Bind();
+#else
                 g_renderer.voxel_ib->Bind();
                 g_renderer.voxel_vb->Bind();
+#endif
 
-                glDisable(GL_DEPTH_TEST);
+                glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
 
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
                 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
 
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_projection", 1, false, view_from_projection.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_projection_from_view", 1, false, projection_from_view.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_world",      1, false, view_from_world.e);
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_world_from_view",      1, false, world_from_view.e);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_projection", 1, false, view_from_projection.e);
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt2("u_screen_size",          g_renderer.size);
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt3("u_voxel_size",           voxels.size);
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformVec3("u_camera_position",      camera_pos_world);
 
-                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                glDrawElements(GL_TRIANGLES, 6 * 6, GL_UNSIGNED_INT, 0);
+                glEnable(GL_CULL_FACE);
             }
 #else
 
-#if 1
-            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &view_from_projection, &world_from_view);
-            AABB aabb = {
-                .min = {},
-                .max = Vec3IntToVec3(voxels.size),
-            };
-            RaycastResult rr = RayVsAABB(ray, aabb);
-            if (rr.success)
-            {
-                //RaycastResult lc = LineCast(ray, voxels, 1000.0f);
-                RaycastResult lc = LineCast(ray, voxels, INFINITY);
-                if (lc.success)
-                {
-                    AddCubeToRender(lc.p, transPurple, 2);
-                }
-            }
-#endif
 
 
             //Rasterized voxel rendering
@@ -558,6 +588,7 @@ int main(int argc, char* argv[])
                 glDrawElements(GL_TRIANGLES, vox_mesh_index_count, GL_UNSIGNED_INT, 0);
             }
             {
+                //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 RenderOpaqueCubes(      projection_from_view, view_from_world);
                 RenderTransparentCubes( projection_from_view, view_from_world);
             }

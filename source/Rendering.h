@@ -121,10 +121,11 @@ struct Renderer {
     VertexBuffer*   voxel_rast_vb   = nullptr;
     IndexBuffer*    voxel_ib        = nullptr;
     VertexBuffer*   voxel_vb        = nullptr;
+    VertexBuffer*   voxel_box_vb = nullptr;
     //bool msaaEnabled = true;
     bool hasAttention;
     //i32 maxMSAASamples = 1;
-    i32 swapInterval = 1;
+    i32 swapInterval = SwapInterval_Immediate;
     //float maxAnisotropic;
     //float currentAnisotropic = 1.0f;
     Vec2Int size;
@@ -134,6 +135,11 @@ struct Renderer {
 
     //ShaderProgram*  programs[+Shader::Count] = {};
     //Texture*        textures[Texture::Count] = {};
+    enum SwapInterval_ {
+        SwapInterval_AdaptiveSync = -1,
+        SwapInterval_Immediate = 0,
+        SwapInterval_VSync = 1,
+    };
 };
 extern Renderer g_renderer;
 

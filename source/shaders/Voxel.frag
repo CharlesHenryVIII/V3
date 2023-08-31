@@ -12,7 +12,9 @@ uniform ivec2   u_screen_size;
 uniform ivec3   u_voxel_size;
 uniform vec3    u_camera_position;
 
-const float infinity = 1. / 0.;
+const float FLT_INF     = 1.0 / 0.0;
+const float FLT_MIN     = 1.175494351e-38;
+const float FLT_EPSILON = 1.192092896e-07;
 
 ivec3 MagicaToTexelFetch(ivec3 a)
 {
@@ -116,7 +118,8 @@ RaycastResult LineCast(const Ray ray, float ray_length)
             result.normal.z = float(-1.0) * line_step.z;
         }
 
-        ivec3 voxel_p = ivec3(trunc(p).xyz);
+        //ivec3 voxel_p = ivec3(trunc(p).xyz);
+        ivec3 voxel_p = ivec3(p);
         result.p = p;  //Vec3IntToVec3(voxel_p);
         if (voxel_p.x > u_voxel_size.x || voxel_p.y > u_voxel_size.y || voxel_p.z > u_voxel_size.z)
             break;
@@ -128,19 +131,146 @@ RaycastResult LineCast(const Ray ray, float ray_length)
     return result;
 }
 
+struct AABB {
+    vec3 min;
+    vec3 max;
+};
+
+
+RaycastResult RayVsAABB(const Ray ray, const AABB box)
+{
+    RaycastResult r;
+    r.voxel_index  = 0;
+    r.p            = vec3(0);
+    r.distance_mag = 0;
+    r.normal       = vec3(0);
+    float tmin = 0;
+    float tmax = FLT_INF;
+
+    for (int slab = 0; slab < 3; ++slab)
+    {
+        if (abs(ray.direction[slab]) < FLT_EPSILON)
+        {
+            // Ray is parallel to the slab
+            if (ray.origin[slab] < box.min[slab] || ray.origin[slab] > box.max[slab])
+                return r;
+        }
+        else
+        {
+            float ood = 1.0 / ray.direction[slab];
+            float t1 = (box.min[slab] - ray.origin[slab]) * ood;
+            float t2 = (box.max[slab] - ray.origin[slab]) * ood;
+            if (t1 > t2)
+            {
+                float temp = t1;
+                t1 = t2;
+                t2 = temp;
+            }
+            tmin = max(tmin, t1);
+            tmax = min(tmax, t2);
+            if (tmin > tmax)
+                return r;
+        }
+    }
+    r.p = ray.origin + ray.direction * tmin;
+    r.distance_mag = tmin;
+
+    const vec3 normals[6] = {
+        vec3(  1.0,  0.0,  0.0 ),
+        vec3( -1.0,  0.0,  0.0 ),
+        vec3(  0.0,  1.0,  0.0 ),
+        vec3(  0.0, -1.0,  0.0 ),
+        vec3(  0.0,  0.0,  1.0 ),
+        vec3(  0.0,  0.0, -1.0 ),
+    };
+
+    vec3 v[6];
+    v[0] = vec3( box.max.x, r.p.y,      r.p.z );
+    v[1] = vec3( box.min.x, r.p.y,      r.p.z );
+    v[2] = vec3( r.p.x,     box.max.y,  r.p.z );
+    v[3] = vec3( r.p.x,     box.min.y,  r.p.z );
+    v[4] = vec3( r.p.x,     r.p.y,      box.max.z );
+    v[5] = vec3( r.p.x,     r.p.y,      box.min.z );
+
+    float currentDistance = 0;
+    float ClosestDistance = FLT_INF;
+    int closestFace = 0;
+    for (int i = 0; i < 6; i++)
+    {
+        currentDistance = distance(r.p, v[i]);
+        if (currentDistance < ClosestDistance)
+        {
+            ClosestDistance = currentDistance;
+            closestFace = i;
+        }
+    }
+    r.normal = normals[closestFace];
+
+    r.voxel_index = 1;
+    return r;
+}
+
 void main()
 {
+
     Ray ray = PixelToRay(ivec2(gl_FragCoord.xy));
 
-    RaycastResult rr = LineCast(ray, infinity);
-    if (rr.voxel_index != 0)
+    AABB box = AABB(vec3(0), vec3(u_voxel_size.x, u_voxel_size.y, u_voxel_size.z ));
+
+    RaycastResult ray_aabb = RayVsAABB(ray, box);
+    if (ray_aabb.voxel_index != 0)
     {
-        vec4 voxel_color = texelFetch(voxel_color_palette, int(rr.voxel_index), 0);
-        color.xyz = voxel_color.xyz;
-        color.a = 1.0;
+        ray.origin = ray_aabb.p;
+#if 1
+        RaycastResult ray_voxel = LineCast(ray, 1000.0);
+#else
+        RaycastResult ray_voxel = LineCast(ray, FLT_INF);
+#endif
+        if (ray_voxel.voxel_index != 0)
+        {
+            vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.voxel_index), 0);
+            color.xyz = voxel_color.xyz;
+            color.a = 1.0;
+
+            vec3 max_aabb_corner_from_ray;
+            if (abs(u_camera_position.x - box.min.x) > abs(u_camera_position.x - box.max.x))
+            {
+                max_aabb_corner_from_ray.x = box.min.x;
+            }
+            else
+            {
+                max_aabb_corner_from_ray.x = box.max.x;
+            }
+            if (abs(u_camera_position.y - box.min.y) > abs(u_camera_position.y - box.max.y))
+            {
+                max_aabb_corner_from_ray.y = box.min.y;
+            }
+            else
+            {
+                max_aabb_corner_from_ray.y = box.max.y;
+            }
+            if (abs(u_camera_position.z - box.min.z) > abs(u_camera_position.z - box.max.z))
+            {
+                max_aabb_corner_from_ray.z = box.min.z;
+            }
+            else
+            {
+                max_aabb_corner_from_ray.z = box.max.z;
+            }
+            float max_voxel_distance = distance(u_camera_position, max_aabb_corner_from_ray);
+
+            gl_FragDepth = ray_voxel.distance_mag / max_voxel_distance;
+        }
+        else
+        {
+            discard;
+        }
     }
     else
+    {
         discard;
+    }
+
 
 
 #if 0 //Getting texel fetch to work with the indices

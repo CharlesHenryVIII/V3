@@ -3,7 +3,7 @@
 #include "Vox.h"
 
 struct RaycastResult {
-    bool    success         = {};
+    u32     success         = {};
     Vec3    p               = {};
     float   distance_mag    = {};
     Vec3    normal          = {};
@@ -14,6 +14,7 @@ struct Ray {
     Vec3 direction;
 };
 
+Vec3 ReflectRay(const Vec3& dir, const Vec3& normal);
 RaycastResult Linecast(const Ray& ray, VoxData voxels, float length);
 RaycastResult VoxelLinecast(const Ray& ray, VoxData voxels, float length);
 [[nodiscard]] RaycastResult RayVsAABB(const Ray& ray, const AABB& box);

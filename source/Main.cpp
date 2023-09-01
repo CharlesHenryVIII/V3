@@ -426,7 +426,7 @@ int main(int argc, char* argv[])
 
 
             Mat4 projection_from_view;
-            gb_mat4_perspective(&projection_from_view, tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 0.1f, 2000.0f);
+            gb_mat4_perspective(&projection_from_view, tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 1.0f, 1000.0f);
             Mat4 view_from_world;
             Vec3 camera_pos_world = camera_position_swivel + camera_look_at_target;
             gb_mat4_look_at(&view_from_world, camera_pos_world, camera_look_at_target, { 0,1,0 });
@@ -454,12 +454,65 @@ int main(int argc, char* argv[])
                 if (lc.success)
                 {
                     //AddCubeToRender(lc.p, transPurple, 1.1f);
-                    AddCubeToRender(lc.p, transPurple, 0.1f);
+                    AddCubeToRender(lc.p, transPurple, 0.5f);
                 }
-#else
-                AddCubeToRender(rr.p, transPurple, 2);
-#endif
             }
+#else
+                
+                Ray linecast_ray = { rr.p, ray.direction };
+                //RaycastResult lc = LineCast(ray, voxels, INFINITY);
+                //lc = LineCast(ray, voxels, 1000.0f);
+                RaycastResult voxel_rays[3] = {};
+                for (i32 i = 0; i < 3; i++)
+                {
+                    voxel_rays[i] = Linecast(ray, voxels, 1000.0f);
+                    if (voxel_rays[i].success)
+                    {
+#if 0
+                        Color c = {};
+                        c.e[i] = 1.0f;
+                        c.a = 0.5f;
+                        AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+#endif
+                        ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
+                        ray.origin = voxel_rays[i].p + ray.direction * 0.01f;
+                    }
+                }
+                Color c = {};
+                c.a = 1.0f;
+                for (i32 i = 2; i >= 0; i--)
+                {
+                    if (voxel_rays[i].success)
+                    {
+                        if (i == 2)
+                        {
+                            c = {};
+                            c.a = 1.0f;
+                            AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+                        }
+                        else
+                        {
+                            ColorInt a;
+                            a.rgba = voxels.color_palette[voxel_rays[i].success].rgba;
+                            Color temp = ToColor(a);
+                            c.r *= temp.r / (i + 1);
+                            c.g *= temp.g / (i + 1);
+                            c.b *= temp.b / (i + 1);
+                            AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+                        }
+                    }
+                    else
+                    {
+                        c.r = 1.0f;
+                        c.g = 1.0f;
+                        c.b = 1.0f;
+                    }
+                }
+                
+                lc = voxel_rays[0];
+            }
+
+#endif
 #endif
 
             //AddCubeToRender(aabb.Center(), transOrange, Vec3IntToVec3(voxels.size));
@@ -564,6 +617,7 @@ int main(int argc, char* argv[])
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformVec3("u_camera_position",      camera_pos_world);
 
                 glDrawElements(GL_TRIANGLES, 6 * 6, GL_UNSIGNED_INT, 0);
+                //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 glEnable(GL_CULL_FACE);
             }
             {

@@ -135,8 +135,9 @@ RaycastResult Linecast(const Ray ray, float ray_length)
     const float voxel = ray.direction[comp] < 0 ? float(voxel_p[comp]) + 1.0f : float(voxel_p[comp]);
     const float t = (voxel - ray.origin[comp]) / ray.direction[comp];
     result.p = ray.origin + ray.direction * t;
+    //result.p = vec3(voxel_p);
 
-    result.distance_mag = distance(ray.origin, p);
+    result.distance_mag = t;
     return result;
 }
 
@@ -219,6 +220,29 @@ RaycastResult RayVsAABB(const Ray ray, const AABB box)
     return r;
 }
 
+vec3 ReflectRay(const vec3 dir, const vec3 normal)
+{
+    vec3 result;
+#if 1
+    result = -(2 * (dot(normal, dir) * normal - dir));
+#else
+    result = dir;
+    if (normal.x != 0)
+    {
+        result.x = -dir.x;
+    }
+    else if (normal.y != 0)
+    {
+        result.y = -dir.y;
+    }
+    else
+    {
+        result.z = -dir.z;
+    }
+#endif
+    return result;
+}
+
 void main()
 {
 
@@ -226,18 +250,102 @@ void main()
 
 #if 1
 
+#if 1
     RaycastResult ray_voxel = Linecast(ray, 1000.0);
     if (ray_voxel.color_index != 0)
     {
+
         vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index), 0);
         color.xyz = voxel_color.xyz;
+        vec3 dist = min(mod(ray_voxel.p, 1), 1.0 - mod(ray_voxel.p, 1));
+
+        //NOTE: Draw voxel hit position
+        //color.xyz = vec3(ray_voxel.p / vec3(u_voxel_size));
+
+#if 0
+        //NOTE: Draw Voxel Boundaries
+        float min_dist;
+        if (ray_voxel.normal.x != 0)
+            min_dist = min(dist.y, dist.z);
+        else if (ray_voxel.normal.y != 0)
+            min_dist = min(dist.x, dist.z);
+        else
+            min_dist = min(dist.x, dist.y);
+        color.xyz += 0.1 * vec3(smoothstep(0.0, 0.1, min_dist));
+#endif
+
+        //NOTE: Weird Voxel Boundaries
+        //color.xyz = vec3(dist);
+
+        //NOTE: Hit Position related to each voxel
+        //color.xyz = mod(ray_voxel.p, 1.0);
+
         color.a = 1.0;
         //gl_FragDepth = 0;
     }
     else
     {
-        discard;
+        color = vec4(0, 0, 0, 1);
+        //discard;
     }
+
+#else
+#define RAY_BOUNCES 3
+    RaycastResult voxel_rays[RAY_BOUNCES];
+    for (int i = 0; i < RAY_BOUNCES; i++)
+    {
+        voxel_rays[i] = Linecast(ray, 1000.0);
+        if (voxel_rays[i].color_index != 0) 
+        {
+            ray.origin = voxel_rays[i].p;
+            ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
+        }
+        else
+        {
+            break;
+        }
+    }
+    const vec4 ambient = vec4(0.1, 0.1, 0.1, 1);
+    vec4 color = vec4(0);
+    color.a = 1.0;
+    for (int i = RAY_BOUNCES - 1; i >= 0; i--)
+    {
+        if (voxel_rays[i].color_index)
+        {
+            if (i == 2)
+            {
+                c = ambient;//vec4(0, 0, 0, 1);
+                //AddCubeToRender(voxel_rays[i].p, c, 0.5);
+            }
+            else
+            {
+                ColorInt a;
+                vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index));
+                c.r *= voxel_color.r / (i + 1);
+                c.g *= voxel_color.g / (i + 1);
+                c.b *= voxel_color.b / (i + 1);
+                AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+            }
+        }
+        else
+        {
+            c = vec4(1);
+        }
+    }
+
+    //if (ray_voxel.color_index != 0)
+    //{
+    //    vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index), 0);
+    //    color.xyz = voxel_color.xyz;
+    //    color.a = 1.0;
+    //    //gl_FragDepth = 0;
+    //}
+    //else
+    //{
+    //    discard;
+    //}
+
+#endif
 
 
 
@@ -295,7 +403,6 @@ void main()
         discard;
     }
 #endif
-
 
 
 #if 0 //Getting texel fetch to work with the indices

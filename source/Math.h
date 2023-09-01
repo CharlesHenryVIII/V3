@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #define BIT(num) (1<<(num))
+#define MATH_PREFIX [[nodiscard]] inline
 
 using i8  = int8_t;
 using i16 = int16_t;
@@ -31,6 +32,15 @@ union ColorInt {
     u8 e[4];
 };
 
+MATH_PREFIX Color ToColor(ColorInt c)
+{
+    Color r;
+    r.r = c.r / float(UCHAR_MAX);
+    r.g = c.g / float(UCHAR_MAX);
+    r.b = c.b / float(UCHAR_MAX);
+    r.a = c.a / float(UCHAR_MAX);
+    return r;
+}
 
 const Color Red         = { 1.00f, 0.00f, 0.00f, 1.00f };
 const Color Green       = { 0.00f, 1.00f, 0.00f, 1.00f };
@@ -70,8 +80,6 @@ typedef gbMat3 Mat3;
 typedef gbMat4 Mat4;
 typedef gbQuat Quat;
 
-#define MATH_PREFIX [[nodiscard]] inline
-
 MATH_PREFIX Vec4 GetVec4(Vec3 a, float b)
 {
     return { a.x, a.y, a.z, b };
@@ -85,6 +93,8 @@ MATH_PREFIX Vec4 GetVec4(Vec3 a, float b)
 
 union U32Pack {
     u32 pack;
+    u32 rgba;
+    u32 xyzw;
     struct { u8 r, g, b, a; };
     struct { u8 x, y, z, w; };
     u8 e[4];

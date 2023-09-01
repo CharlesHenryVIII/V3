@@ -124,6 +124,29 @@
 //    return result;
 //}
 
+Vec3 ReflectRay(const Vec3& dir, const Vec3& normal)
+{
+    Vec3 result;
+#if 0
+    result = -(2 * (DotProduct(normal, dir) * normal - dir));
+#else
+    result = dir;
+    if (normal.x != 0)
+    {
+        result.x = -dir.x;
+    }
+    else if (normal.y != 0)
+    {
+        result.y = -dir.y;
+    }
+    else
+    {
+        result.z = -dir.z;
+    }
+#endif
+    return result;
+}
+
 RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
 {
     assert(length >= 0.0f);
@@ -139,8 +162,6 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
     const Vec3 tDelta = Abs(1.0f / ray.direction);
     Vec3Int voxel_p;
 
-    
-    //u32 index = 0;
     while (!result.success) 
     {
         if (Distance(p, ray.origin) > length)
@@ -168,13 +189,22 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
 
         voxel_p = ToVec3Int(Floor(p));
         assert(voxels.color_indices.size() == 1);
+#if 1
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
             continue;
         if (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z)
             continue;
-        
+#else
+        if ((voxel_p.x <= 0 || voxel_p.y <= 0 || voxel_p.z <= 0) ||
+            (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z))
+        {
+            float dotp = DotProduct(ray.direction, result.normal);
+            if (dotp > 0)
+                break;
+            continue;
+        }
+#endif
         result.success = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
-
     }
     
     u32 comp = (result.normal.x ? 0 : (result.normal.y ? 1 : 2));
@@ -182,8 +212,7 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
     float t = (voxel - ray.origin.e[comp]) / ray.direction.e[comp];
     result.p = ray.origin + ray.direction * t;
 
-    result.distance_mag = Distance(ray.origin, p);
-    //result.success      = index;
+    result.distance_mag = t;
     return result;
 }
 

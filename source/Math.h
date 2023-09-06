@@ -85,12 +85,6 @@ MATH_PREFIX Vec4 GetVec4(Vec3 a, float b)
     return { a.x, a.y, a.z, b };
 }
 
-//union Vert2d {
-//    struct { float x, y, z, u, v; };
-//    struct { Vec3 xyz; Vec2 uv; };
-//    float e[5];
-//};
-
 union U32Pack {
     u32 pack;
     u32 rgba;
@@ -487,54 +481,54 @@ MATH_PREFIX Vec2 operator-(float a, Vec2 b)
 
 
 template <typename T>
-[[nodiscard]] T Min(T a, T b)
+[[nodiscard]] T Min(const T a, const T b)
 {
     return a < b ? a : b;
 }
 
  template <typename T>
-[[nodiscard]] T Max(T a, T b)
+[[nodiscard]] T Max(const T a, const T b)
 {
     return a > b ? a : b;
 }
 
 template <typename T>
-[[nodiscard]] T Clamp(T v, T min, T max)
+[[nodiscard]] T Clamp(const T v, const T min, const T max)
 {
     return Max(min, Min(max, v));
 }
 
-MATH_PREFIX Vec2 Floor(Vec2 v)
+MATH_PREFIX Vec2 Floor(const Vec2& v)
 {
     return { floorf(v.x), floorf(v.y) };
 }
 
-MATH_PREFIX Vec3 Floor(Vec3 v)
+MATH_PREFIX Vec3 Floor(const Vec3& v)
 {
     return { floorf(v.x), floorf(v.y), floorf(v.z) };
 }
 
-MATH_PREFIX Vec4 Floor(Vec4 v)
+MATH_PREFIX Vec4 Floor(const Vec4& v)
 {
     return { floorf(v.x), floorf(v.y), floorf(v.z), floorf(v.w)  };
 }
 
-MATH_PREFIX Vec3 Trunc(Vec3 v)
+MATH_PREFIX Vec3 Trunc(const Vec3& v)
 {
     return { truncf(v.x), truncf(v.y), truncf(v.z) };
 }
 
-MATH_PREFIX Vec4 Trunc(Vec4 v)
+MATH_PREFIX Vec4 Trunc(const Vec4& v)
 {
     return { truncf(v.x), truncf(v.y), truncf(v.z), truncf(v.w)  };
 }
 
-MATH_PREFIX Vec3 Ceiling(Vec3 v)
+MATH_PREFIX Vec3 Ceiling(const Vec3& v)
 {
     return { ceilf(v.x), ceilf(v.y), ceilf(v.z) };
 }
 
-MATH_PREFIX Vec4 Ceiling(Vec4 v)
+MATH_PREFIX Vec4 Ceiling(const Vec4& v)
 {
     return { ceilf(v.x), ceilf(v.y), ceilf(v.z), ceilf(v.w)  };
 }
@@ -544,17 +538,17 @@ MATH_PREFIX float Fract(float a)
     return a - floorf(a);
 }
 
-MATH_PREFIX Vec2 Fract(Vec2 a)
+MATH_PREFIX Vec2 Fract(const Vec2& a)
 {
     return a - Floor(a);
 }
 
-MATH_PREFIX Vec3 Fract(Vec3 a)
+MATH_PREFIX Vec3 Fract(const Vec3& a)
 {
     return a - Floor(a);
 }
 
-MATH_PREFIX Vec4 Fract(Vec4 a)
+MATH_PREFIX Vec4 Fract(const Vec4& a)
 {
     return a - Floor(a);
 }
@@ -563,30 +557,30 @@ MATH_PREFIX float Abs(float a)
 {
     return fabs(a);
 }
-MATH_PREFIX Vec3 Abs(Vec3 a)
+MATH_PREFIX Vec3 Abs(const Vec3& a)
 {
     return { fabs(a.x), fabs(a.y), fabs(a.z) };
 }
-MATH_PREFIX Vec3 Abs(Vec2 a)
+MATH_PREFIX Vec3 Abs(const Vec2& a)
 {
     return { abs(a.x), abs(a.y) };
 }
-MATH_PREFIX Vec3Int Abs(Vec3Int a)
+MATH_PREFIX Vec3Int Abs(const Vec3Int& a)
 {
     return { abs(a.x), abs(a.y), abs(a.z) };
 }
-MATH_PREFIX Vec2Int Abs(Vec2Int a)
+MATH_PREFIX Vec2Int Abs(const Vec2Int& a)
 {
     return { abs(a.x), abs(a.y) };
 }
 
-MATH_PREFIX Vec2 Sine(Vec2 v)
+MATH_PREFIX Vec2 Sine(const Vec2& v)
 {
     Vec2 r = { sinf(v.x), sinf(v.y) };
     return r;
 }
 
-MATH_PREFIX Vec3 Sine(Vec3 v)
+MATH_PREFIX Vec3 Sine(const Vec3& v)
 {
     Vec3 r = { sinf(v.x), sinf(v.y), sinf(v.z) };
     return r;
@@ -604,50 +598,32 @@ MATH_PREFIX float DegToRad(float angle)
     return (angle / 360 ) * (tau);
 }
 
-//inline float cos(float t)
-//{
-//    return cosf(t);
-//}
-//
-//inline float sine(float t)
-//{
-//    return sinf(t);
-//}
-//
-//inline float tan(float t)
-//{
-//    return tanf(t);
-//}
-
-MATH_PREFIX Vec3 Cross(Vec3 a, Vec3 b)
-{
-    Vec3 result;
-    gb_vec3_cross(&result, a, b);
-    return result;
-}
-
-//inline float Vec2Distance(Vec2 A, Vec2 B)
-//{
-//    return sqrtf(((B.x - A.x) * (B.x - A.x)) + ((B.y - A.y) * (B.y - A.y)));
-//}
-
 //TODO: Improve
-MATH_PREFIX Vec3 NormalizeZero(Vec3 v)
+MATH_PREFIX Vec3 NormalizeZero(const Vec3& v)
 {
     float prod = v.x * v.x + v.y * v.y + v.z * v.z;
     if (prod == 0.0f)
         return {};
     float hyp = sqrtf(prod);
-    Vec3 result = { (v.x / hyp), (v.y / hyp) , (v.z / hyp)};
+    Vec3 result = { (v.x / hyp), (v.y / hyp), (v.z / hyp)};
     return result;
 }
-MATH_PREFIX Vec3 Normalize(Vec3 v)
+MATH_PREFIX Vec2 NormalizeZero(const Vec2& v)
+{
+    float prod = v.x * v.x + v.y * v.y;
+    if (prod == 0.0f)
+        return {};
+    float hyp = sqrtf(prod);
+    Vec2 result = { (v.x / hyp), (v.y / hyp) };
+    return result;
+}
+MATH_PREFIX Vec3 Normalize(const Vec3& v)
 {
     float hyp = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
     Vec3 result = { (v.x / hyp), (v.y / hyp) , (v.z / hyp)};
     return result;
 }
-MATH_PREFIX Vec2 Normalize(Vec2 v)
+MATH_PREFIX Vec2 Normalize(const Vec2& v)
 {
     float hyp = sqrtf((v.x * v.x) + (v.y * v.y));
     return { (v.x / hyp), (v.y / hyp) };
@@ -680,29 +656,17 @@ inline double* Normalize(double* v, size_t length)
     }
     return v;
 }
-//inline Vec2 NormalizeZero(Vec2 v)
-//{
-//    float hyp = sqrtf((v.x * v.x) + (v.y * v.y));
-//    if (hyp == 0)
-//        return {};
-//	return{ (v.x / hyp), (v.y / hyp) };
-//}
 
 template <typename T>
-MATH_PREFIX T Lerp(T a, T b, float t)
+MATH_PREFIX T Lerp(const T& a, const T& b, float t)
 {
     return a + (b - a) * t;
 }
 
-MATH_PREFIX Vec3 Converge(Vec3 value, Vec3 target, float rate, float dt)
+MATH_PREFIX Vec3 Converge(const Vec3& value, const Vec3& target, float rate, float dt)
 {
     return Lerp(target, value, exp2(-rate * dt));
 }
-
-//MATH_PREFIX float Lerp(float a, float b, float t)
-//{
-//    return a + (b - a) * t;
-//}
 
 #if 1
 float Bilinear(float p00, float p10, float p01, float p11, float x, float y);
@@ -726,26 +690,22 @@ Atan2f return value:
 -3pi/4    -pi/2        pi/4
 */
 
-MATH_PREFIX float DotProduct(Vec2 a, Vec2 b)
+MATH_PREFIX float DotProduct(const Vec2& a, const Vec2& b)
 {
     float r = a.x * b.x + a.y * b.y;
     return r;
 }
-MATH_PREFIX float DotProduct(Vec3 a, Vec3 b)
+MATH_PREFIX float DotProduct(const Vec3& a, const Vec3& b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
-MATH_PREFIX Vec3 CrossProduct(Vec3 a, Vec3 b)
+MATH_PREFIX Vec3 CrossProduct(const Vec3& a, const Vec3& b)
 {
-    Vec3 r = {};
-    gb_vec3_cross(&r, a, b);
-    return r;
+    return gb_vec3_cross(a, b);
 }
-MATH_PREFIX float CrossProduct(Vec2 a, Vec2 b)
+MATH_PREFIX float CrossProduct(const Vec2& a, const Vec2& b)
 {
-    float r = {};
-    gb_vec2_cross(&r, a, b);
-    return r;
+    return gb_vec2_cross(a, b);
 }
 
 MATH_PREFIX float Pythags(const Vec2& a)
@@ -754,7 +714,7 @@ MATH_PREFIX float Pythags(const Vec2& a)
 }
 MATH_PREFIX float Pythags(const Vec3& a)
 {
-    return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
+    return sqrtf((a.x * a.x) + (a.y * a.y) + (a.z * a.z));
 }
 MATH_PREFIX float Pythags(const Vec2Int& a)
 {
@@ -765,52 +725,57 @@ MATH_PREFIX float Pythags(const Vec3Int& a)
     return Pythags(Vec3({ float(a.x), float(a.y), float(a.z) }));
 }
 
-MATH_PREFIX float Distance(Vec2 a, Vec2 b)
+MATH_PREFIX float Distance(const Vec2& a, const Vec2& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX double DistanceD(Vec2 a, Vec2 b)
+MATH_PREFIX double DistanceD(const Vec2& a, const Vec2& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX double Distance(Vec3Int a, Vec3Int b)
+MATH_PREFIX double Distance(const Vec3Int& a, const Vec3Int& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX double Distance(Vec2Int a, Vec2Int b)
+MATH_PREFIX double Distance(const Vec2Int& a, const Vec2Int& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX float Distance(Vec3 a, Vec3 b)
+MATH_PREFIX float Distance(const Vec3& a, const Vec3& b)
 {
     return Pythags(a - b);
 }
 
-MATH_PREFIX float Length(Vec2 a)
+MATH_PREFIX float Length(const Vec2& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX double LengthD(Vec2 a)
+MATH_PREFIX double LengthD(const Vec2& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX double Length(Vec3Int a)
+MATH_PREFIX double Length(const Vec3Int& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX double Length(Vec2Int a)
+MATH_PREFIX double Length(const Vec2Int& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX float Length(Vec3 a)
+MATH_PREFIX float Length(const Vec3& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX Vec3 Acos(Vec3 a)
+MATH_PREFIX Vec3 Acos(const Vec3& a)
 {
     return { acos(a.x), acos(a.y), acos(a.z) };
 }
 
+MATH_PREFIX Vec3 Round(const Vec2& a)
+{
+    Vec3 r = { roundf(a.x), roundf(a.y) };
+    return r;
+}
 MATH_PREFIX Vec3 Round(const Vec3& a)
 {
     Vec3 r = { roundf(a.x), roundf(a.y), roundf(a.z) };
@@ -847,30 +812,30 @@ MATH_PREFIX float RandomFloat(const float min, const float max)
     return min + (max - min) * (rand() / float(RAND_MAX));
 }
 
-MATH_PREFIX Vec3Int ToVec3Int(Vec3 a)
+MATH_PREFIX Vec3Int ToVec3Int(const Vec3& a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(a.z) };
 }
-MATH_PREFIX Vec3    ToVec3(Vec3Int a)
+MATH_PREFIX Vec3    ToVec3(const Vec3Int& a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z) };
 }
-MATH_PREFIX Vec2Int ToVec2Int(Vec2 a)
+MATH_PREFIX Vec2Int ToVec2Int(const Vec2& a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y) };
 }
-MATH_PREFIX Vec2    ToVec2(Vec2Int a)
+MATH_PREFIX Vec2    ToVec2(const Vec2Int& a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y) };
 }
 
 //Multiplication of two vectors without adding each dimension to get the dot product
-MATH_PREFIX Vec3Int HadamardProduct(Vec3Int a, Vec3Int b)
+MATH_PREFIX Vec3Int HadamardProduct(const Vec3Int& a, const Vec3Int& b)
 {
     return { a.x * b.x, a.y * b.y, a.z * b.z };
 }
 //Multiplication of two vectors without adding each dimension to get the dot product
-MATH_PREFIX Vec3 HadamardProduct(Vec3 a, Vec3 b)
+MATH_PREFIX Vec3 HadamardProduct(const Vec3& a, const Vec3& b)
 {
     return { a.x * b.x, a.y * b.y, a.z * b.z };
 }

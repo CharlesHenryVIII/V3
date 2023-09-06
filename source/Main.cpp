@@ -26,7 +26,7 @@
 #include <vector>
 //#include <algorithm>
 
-#define RASTERIZED_RENDERING 0
+#define RASTERIZED_RENDERING 1
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -88,6 +88,8 @@ void InitializeImGui()
 
 int main(int argc, char* argv[])
 {
+    gbVec2 a = { 1, 2 };
+    +a;
     //Initilizers
     InitializeVideo();
     InitializeImGui();
@@ -403,8 +405,7 @@ int main(int argc, char* argv[])
 
             Quat camera_rotation = gb_quat_euler_angles(camera_pitch, camera_yaw, 0.0f);
             Vec3 camera_3d_distance = { 0, 0, -camera_dis };
-            Vec3 camera_position_swivel;
-            gb_quat_rotate_vec3(&camera_position_swivel, camera_rotation, camera_3d_distance);
+            Vec3 camera_position_swivel = gb_quat_rotate_vec3(camera_rotation, camera_3d_distance);
 
             //travel distance
             Vec3 wanted_direction = {   playerInput.keyStates[SDLK_a].down ? 1.0f : (playerInput.keyStates[SDLK_d].down ? -1.0f : 0.0f),
@@ -416,28 +417,22 @@ int main(int argc, char* argv[])
                 speed *= 10.0f;
             if (playerInput.keyStates[SDLK_LCTRL].down)
                 speed /= 10.0f;
-            Mat4 yaw_only_rotation;
-            gb_mat4_from_quat(&yaw_only_rotation, gb_quat_euler_angles(0.0f, camera_yaw, 0.0f));
+            Mat4 yaw_only_rotation = gb_mat4_from_quat(gb_quat_euler_angles(0.0f, camera_yaw, 0.0f));
             Vec3 front = (yaw_only_rotation * GetVec4(wanted_direction, 0)).xyz;
-            gb_vec3_norm0(&front, front);
+            front = gb_vec3_norm0(front);
             Vec3 targetVelocity = front * speed;
             camera_velocity = Converge(camera_velocity, targetVelocity, 16.0f, deltaTime);
             camera_look_at_target += camera_velocity * deltaTime;
 
 
-            Mat4 projection_from_view;
-            gb_mat4_perspective(&projection_from_view, tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 1.0f, 1000.0f);
-            Mat4 view_from_world;
+            Mat4 projection_from_view = gb_mat4_perspective(tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 1.0f, 1000.0f);
             Vec3 camera_pos_world = camera_position_swivel + camera_look_at_target;
-            gb_mat4_look_at(&view_from_world, camera_pos_world, camera_look_at_target, { 0,1,0 });
-
-            Mat4 view_from_projection;
-            Mat4 world_from_view;
-            gb_mat4_inverse(&view_from_projection,  &projection_from_view);
-            gb_mat4_inverse(&world_from_view,       &view_from_world);
+            Mat4 view_from_world        = gb_mat4_look_at(camera_pos_world, camera_look_at_target, { 0,1,0 });
+            Mat4 view_from_projection   = gb_mat4_inverse(projection_from_view);
+            Mat4 world_from_view        = gb_mat4_inverse(view_from_world);
 
 #if 1
-            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, &view_from_projection, &world_from_view);
+            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, view_from_projection, world_from_view);
             AABB aabb = {
                 .min = {},
                 .max = ToVec3(voxels.size),

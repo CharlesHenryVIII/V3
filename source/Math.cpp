@@ -198,7 +198,7 @@ Frustum ComputeFrustum(const Mat4& in)
     matd_mul(out, in1, in2);
     Mat4 testOut = test1 * test2;
     Mat4 mvProj = in;
-    gb_mat4_transpose(&mvProj);
+    gb_mat4_transpose(mvProj);
 
     for (i32 i = 0; i < 4; ++i)
     {

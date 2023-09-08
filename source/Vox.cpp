@@ -111,7 +111,7 @@ struct LAYR {
 };
 struct TransformInfo {
     i8 rotation;
-    Vec3Int translation;
+    Vec3I translation;
     i32 frame_index;
 };
 struct nTRN { //transform node chunk
@@ -172,7 +172,7 @@ void GetValueFromDict(i32& out, Dict& d, const std::string& key)
     if (d.find(key) != d.end())
         out = atoi(d[key].c_str());
 }
-void GetValueFromDict(Vec3Int& out, Dict& d, const std::string& key)
+void GetValueFromDict(Vec3I& out, Dict& d, const std::string& key)
 {
     if (d.find(key) != d.end())
     {
@@ -213,7 +213,7 @@ struct VoxChunkAttributes {
     nSHP shape_node_chunk;
 };
 struct Vox {
-    Vec3Int size;
+    Vec3I size;
     std::vector<VoxelBlockData>                 color_indices;
     std::unordered_map<i32, VoxChunkAttributes> vox_chunks;
     std::unordered_map<i32, MaterialProperties> materials;
@@ -694,9 +694,9 @@ u16 VoxelPositionToIndex(Vec3 p)
     return result;
 }
 
-Vec3Int IndexToVoxelPosition(u16 i)
+Vec3I IndexToVoxelPosition(u16 i)
 {
-    Vec3Int result;
+    Vec3I result;
     result.x = (i) % VOXEL_MAX_SIZE;
     result.y = ((i - result.x) % (VOXEL_MAX_SIZE * VOXEL_MAX_SIZE)) / VOXEL_MAX_SIZE;
     result.z = (i - result.x - (result.y * VOXEL_MAX_SIZE)) / (VOXEL_MAX_SIZE * VOXEL_MAX_SIZE);
@@ -704,85 +704,85 @@ Vec3Int IndexToVoxelPosition(u16 i)
 }
 
 union VertexBlockCheck {
-    struct { Vec3Int e0, e1, e2, e3, e4, e5, e6, e7; };
+    struct { Vec3I e0, e1, e2, e3, e4, e5, e6, e7; };
 };
 
 static const VertexBlockCheck vertex_blocks_to_check[+Face::Count] = {
     {//right +X
-        Vec3Int({  0,  1,  0 }),//Vertex 0
-                {  0,  0,  1 },
+        Vec3I({  0,  1,  0 }),//Vertex 0
+              {  0,  0,  1 },
 
-                {  0,  0,  1 }, //Vertex 1
-                {  0, -1,  0 },
-                {  0,  1,  0 }, //Vertex 2
-                {  0,  0, -1 },
+              {  0,  0,  1 }, //Vertex 1
+              {  0, -1,  0 },
+              {  0,  1,  0 }, //Vertex 2
+              {  0,  0, -1 },
 
-                {  0,  0, -1 }, //Vertex 3
-                {  0, -1,  0 },
+              {  0,  0, -1 }, //Vertex 3
+              {  0, -1,  0 },
     },
     {//left -X
-        Vec3Int({  0,  1,  0 }),//Vertex 0
-                {  0,  0, -1 },
+        Vec3I({  0,  1,  0 }),//Vertex 0
+              {  0,  0, -1 },
 
-                {  0,  0, -1 }, //Vertex 1
-                {  0, -1,  0 },
-                {  0,  1,  0 }, //Vertex 2
-                {  0,  0,  1 },
+              {  0,  0, -1 }, //Vertex 1
+              {  0, -1,  0 },
+              {  0,  1,  0 }, //Vertex 2
+              {  0,  0,  1 },
 
-                {  0,  0,  1 }, //Vertex 3
-                {  0, -1,  0 },
+              {  0,  0,  1 }, //Vertex 3
+              {  0, -1,  0 },
     },
     {//Top +Y
-        Vec3Int({  1,  0,  0 }),//Vertex 0
-                {  0,  0,  1 },
+        Vec3I({  1,  0,  0 }),//Vertex 0
+              {  0,  0,  1 },
 
-                {  1,  0,  0 }, //Vertex 1
-                {  0,  0, -1 },
-                { -1,  0,  0 }, //Vertex 2
-                {  0,  0,  1 },
+              {  1,  0,  0 }, //Vertex 1
+              {  0,  0, -1 },
+              { -1,  0,  0 }, //Vertex 2
+              {  0,  0,  1 },
 
-                { -1,  0,  0 }, //Vertex 3
-                {  0,  0, -1 },
+              { -1,  0,  0 }, //Vertex 3
+              {  0,  0, -1 },
     },
     {//Bot -Y
-        Vec3Int({ -1,  0,  0 }),//Vertex 0
-                {  0,  0,  1 },
+        Vec3I({ -1,  0,  0 }),//Vertex 0
+              {  0,  0,  1 },
 
-                { -1,  0,  0 }, //Vertex 1
-                {  0,  0, -1 },
-                {  1,  0,  0 }, //Vertex 2
-                {  0,  0,  1 },
+              { -1,  0,  0 }, //Vertex 1
+              {  0,  0, -1 },
+              {  1,  0,  0 }, //Vertex 2
+              {  0,  0,  1 },
 
-                {  1,  0,  0 }, //Vertex 3
-                {  0,  0, -1 },
+              {  1,  0,  0 }, //Vertex 3
+              {  0,  0, -1 },
     },
     {//Front +Z
-        Vec3Int({ -1,  0,  0 }),//Vertex 0
-                {  0,  1,  0 },
+        Vec3I({ -1,  0,  0 }),//Vertex 0
+              {  0,  1,  0 },
 
-                { -1,  0,  0 }, //Vertex 1
-                {  0, -1,  0 },
-                {  1,  0,  0 }, //Vertex 2
-                {  0,  1,  0 },
+              { -1,  0,  0 }, //Vertex 1
+              {  0, -1,  0 },
+              {  1,  0,  0 }, //Vertex 2
+              {  0,  1,  0 },
 
-                {  1,  0,  0 }, //Vertex 3
-                {  0, -1,  0 },
+              {  1,  0,  0 }, //Vertex 3
+              {  0, -1,  0 },
     },
     {//Front -Z
-        Vec3Int({  1,  0,  0 }),//Vertex 0
-                {  0,  1,  0 },
+        Vec3I({  1,  0,  0 }),//Vertex 0
+              {  0,  1,  0 },
 
-                {  1,  0,  0 }, //Vertex 1
-                {  0, -1,  0 },
-                { -1,  0,  0 }, //Vertex 2
-                {  0,  1,  0 },
+              {  1,  0,  0 }, //Vertex 1
+              {  0, -1,  0 },
+              { -1,  0,  0 }, //Vertex 2
+              {  0,  1,  0 },
 
-                { -1,  0,  0 }, //Vertex 3
-                {  0, -1,  0 },
+              { -1,  0,  0 }, //Vertex 3
+              {  0, -1,  0 },
     },
 };
 
-u8 GetVoxel(const VoxelBlockData& voxels, const Vec3Int& p)
+u8 GetVoxel(const VoxelBlockData& voxels, const Vec3I& p)
 {
     if (p.x >= 0 && p.x < VOXEL_MAX_SIZE &&
     p.y >= 0 && p.y < VOXEL_MAX_SIZE &&
@@ -801,15 +801,15 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
         for (i32 y = 0; y < VOXEL_MAX_SIZE; y++)
             for (i32 x = 0; x < VOXEL_MAX_SIZE; x++)
             {
-                const Vec3Int this_voxel_pos = { x, y, z };
+                const Vec3I this_voxel_pos = { x, y, z };
                 const u8 this_voxel_i = GetVoxel(voxel_color_is, this_voxel_pos);
                 if (this_voxel_i)
                 {
                     for (u32 face_i = 0; face_i < +Face::Count; face_i++)
                     {
                         //voxels.e[x][y][z];
-                        Vec3Int vf = ToVec3Int(faceNormals[face_i]);
-                        Vec3Int checking_block_pos;
+                        Vec3I vf = ToVec3I(faceNormals[face_i]);
+                        Vec3I checking_block_pos;
                         checking_block_pos = this_voxel_pos + vf;
                         //checkingBlockPos.x = x + vf.x;
                         //checkingBlockPos.y = y + vf.y;
@@ -827,9 +827,9 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
                                 v.rgba = voxel_data.color_palette[this_voxel_i];
                                 v.n = face_i;
 
-                                Vec3Int ap = *(&vertex_blocks_to_check[face_i].e0 + ((i * 2) + 0));
-                                Vec3Int bp = *(&vertex_blocks_to_check[face_i].e0 + ((i * 2) + 1));
-                                Vec3Int cp = ap + bp;
+                                Vec3I ap = *(&vertex_blocks_to_check[face_i].e0 + ((i * 2) + 0));
+                                Vec3I bp = *(&vertex_blocks_to_check[face_i].e0 + ((i * 2) + 1));
+                                Vec3I cp = ap + bp;
                                 const u8 ai = GetVoxel(voxel_color_is, checking_block_pos + ap);
                                 const u8 bi = GetVoxel(voxel_color_is, checking_block_pos + bp);
                                 const u8 ci = GetVoxel(voxel_color_is, checking_block_pos + cp);

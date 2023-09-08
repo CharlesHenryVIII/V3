@@ -1,3 +1,4 @@
+#define GB_MATH_IMPLEMENTATION
 #include "Math.h"
 
 //uint32 PCG32_Random_R(uint64& state, uint64& inc)
@@ -188,6 +189,7 @@ Frustum ComputeFrustum(const Mat4& in)
     test2.col[0] = {3, 12, 0.12f, 0.3f};
     test2.col[1] = {0, 1, 100, 18};
 
+    assert(false); //Is matd_mul() actually used?
     float out[4][4];
     float in1[4][4];
     float in2[4][4];
@@ -198,7 +200,7 @@ Frustum ComputeFrustum(const Mat4& in)
     matd_mul(out, in1, in2);
     Mat4 testOut = test1 * test2;
     Mat4 mvProj = in;
-    gb_mat4_transpose(mvProj);
+    gb_mat4_transpose<float>(mvProj);
 
     for (i32 i = 0; i < 4; ++i)
     {
@@ -232,7 +234,7 @@ bool IsBoxInFrustum(const Frustum& f, float *bmin, float *bmax)
    return 1;
 }
 
-i32 ManhattanDistance(Vec3Int a, Vec3Int b)
+i32 ManhattanDistance(Vec3I a, Vec3I b)
 {
     return abs(a.x - b.x) + abs(a.y - b.y) + abs(a.z - b.z);
 }

@@ -72,13 +72,26 @@ const float pi = 3.14159f;
 const float tau = 2 * pi;
 const float inf = INFINITY;
 
-typedef gbVec2 Vec2;
-typedef gbVec3 Vec3;
-typedef gbVec4 Vec4;
-typedef gbMat2 Mat2;
-typedef gbMat3 Mat3;
-typedef gbMat4 Mat4;
-typedef gbQuat Quat;
+typedef gbVec2<float>   Vec2;
+typedef gbVec3<float>   Vec3;
+typedef gbVec4<float>   Vec4;
+typedef gbMat2<float>   Mat2;
+typedef gbMat3<float>   Mat3;
+typedef gbMat4<float>   Mat4;
+typedef gbQuat<float>   Quat;
+typedef gbVec2<double>  Vec2d;
+typedef gbVec3<double>  Vec3d;
+typedef gbVec4<double>  Vec4d;
+typedef gbMat2<double>  Mat2d;
+typedef gbMat3<double>  Mat3d;
+typedef gbMat4<double>  Mat4d;
+typedef gbQuat<double>  Quatd;
+typedef gbVec2<i32>     Vec2I;
+typedef gbVec3<i32>     Vec3I;
+typedef gbVec4<i32>     Vec4I;
+typedef gbMat2<i32>     Mat2I;
+typedef gbMat3<i32>     Mat3I;
+typedef gbMat4<i32>     Mat4I;
 
 MATH_PREFIX Vec4 GetVec4(Vec3 a, float b)
 {
@@ -100,26 +113,26 @@ struct Vertex {
     Vec3 n;
 };
 
-union Vec2Int {
-    struct { i32 x, y; };
-    i32 e[2];
-};
-
-union Vec3Int {
-    struct { i32 x, y, z; };
-
-    Vec2Int xy;
-    i32 e[3];
-};
-
-union Vec2d {
-    struct { double x, y; };
-    double e[2];
-};
+//union Vec2I {
+//    struct { i32 x, y; };
+//    i32 e[2];
+//};
+//
+//union Vec3I {
+//    struct { i32 x, y, z; };
+//
+//    Vec2I xy;
+//    i32 e[3];
+//};
+//
+//union Vec2d {
+//    struct { double x, y; };
+//    double e[2];
+//};
 
 struct RectInt {
-    Vec2Int botLeft = {};
-    Vec2Int topRight = {};
+    Vec2I botLeft = {};
+    Vec2I topRight = {};
 
     i32 Width()
     {
@@ -188,7 +201,7 @@ struct Range {
 //    Vec2 botLeft;
 //    Vec2 topRight;
 //
-//    bool Collision(Vec2Int loc)
+//    bool Collision(Vec2I loc)
 //    {
 //        bool result = false;
 //        if (loc.y > botLeft.x && loc.y < topRight.x)
@@ -199,8 +212,8 @@ struct Range {
 //};
 
 struct Rectangle_Int {
-    Vec2Int bottomLeft;
-    Vec2Int topRight;
+    Vec2I bottomLeft;
+    Vec2I topRight;
 
     i32 Width() const
     {
@@ -224,7 +237,7 @@ struct Rectangle_Int {
 //}
 
 
-MATH_PREFIX Vec2Int operator*(const Vec2Int& a, const float b)
+MATH_PREFIX Vec2I operator*(const Vec2I& a, const float b)
 {
     return { int(a.x * b),  int(a.y * b) };
 }
@@ -267,218 +280,6 @@ inline void operator-=(Vec3& a, float b)
 {
     a = {a.x - b, a.y - b, a.z - b};
 }
-MATH_PREFIX bool operator==(Vec3Int a, Vec3Int b)
-{
-    return ((a.x == b.x) && (a.y == b.y) && (a.z == b.z));
-}
-MATH_PREFIX bool operator>(Vec3Int a, Vec3Int b)
-{
-    return ((a.x > b.x) && (a.y > b.y) && (a.z > b.z));
-}
-MATH_PREFIX bool operator<(Vec3Int a, Vec3Int b)
-{
-    return ((a.x < b.x) && (a.y < b.y) && (a.z < b.z));
-}
-MATH_PREFIX bool operator>=(Vec3Int a, Vec3Int b)
-{
-    return ((a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z));
-}
-MATH_PREFIX bool operator<=(Vec3Int a, Vec3Int b)
-{
-    return ((a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z));
-}
-MATH_PREFIX Vec3Int operator-(Vec3Int a, Vec3Int b)
-{
-    Vec3Int r = {a.x - b.x, a.y - b.y, a.z - b.z};
-    return r;
-}
-MATH_PREFIX Vec3Int operator+(Vec3Int a, Vec3Int b)
-{
-    Vec3Int r = {a.x + b.x, a.y + b.y, a.z + b.z};
-    return r;
-}
- inline Vec3Int& operator+=(Vec3Int &a, Vec3Int b)
-{
-    return (a = a + b);
-}
-inline Vec3Int& operator-=(Vec3Int &a, Vec3Int b)
-{
-    return (a = a - b);
-}
-//
-MATH_PREFIX Vec3 operator/(float a, Vec3 b)
-{
-    Vec3 r = { a / b.x, a / b.y, a / b.z };
-    return r;
-}
-MATH_PREFIX Vec2 operator/(float a, Vec2 b)
-{
-    Vec2 r = { a / b.x, a / b.y };
-    return r;
-}
-MATH_PREFIX Vec3Int operator/(Vec3Int a, i32 b)
-{
-    Vec3Int r = {a.x / b, a.y / b, a.z / b };
-    return r;
-}
-MATH_PREFIX Vec3Int operator/=(Vec3Int& a, i32 b)
-{
-    a = a / b;
-}
-MATH_PREFIX Vec2Int operator/(Vec2Int a, i32 b)
-{
-    Vec2Int r = {a.x / b, a.y / b };
-    return r;
-}
-MATH_PREFIX Vec2Int operator/=(Vec2Int& a, i32 b)
-{
-    a = a / b;
-}
-//
-MATH_PREFIX Vec3Int operator%(Vec3Int a, Vec3Int b)
-{
-    Vec3Int r = {a.x % b.x, a.y % b.y, a.z % b.z };
-    return r;
-}
-MATH_PREFIX Vec3Int operator%=(Vec3Int& a, Vec3Int b)
-{
-    a = a % b;
-}
-//
-MATH_PREFIX Vec3Int operator*(i32 a, Vec3Int b)
-{
-    Vec3Int r = { a * b.x, a * b.y, a * b.z };
-    return r;
-}
-MATH_PREFIX Vec3Int operator*(Vec3Int a, i32 b)
-{
-    Vec3Int r = { a.x * b, a.y * b, a.z * b };
-    return r;
-}
-MATH_PREFIX Vec2Int operator*(i32 a, Vec2Int b)
-{
-    Vec2Int r = { a * b.x, a * b.y };
-    return r;
-}
-MATH_PREFIX Vec2Int operator*(Vec2Int a, i32 b)
-{
-    Vec2Int r = { a.x * b, a.y * b };
-    return r;
-}
-//
-MATH_PREFIX Vec3Int operator+(Vec3Int a, i32 b)
-{
-    Vec3Int r = { a.x + b, a.y + b, a.z + b };
-    return r;
-}
-MATH_PREFIX Vec3Int operator+(i32 a, Vec3Int b)
-{
-    Vec3Int r = { a + b.x, a + b.y, a + b.z };
-    return r;
-}
-MATH_PREFIX Vec3Int operator-(Vec3Int a, i32 b)
-{
-    Vec3Int r = { a.x - b, a.y - b, a.z - b };
-    return r;
-}
-MATH_PREFIX Vec2Int operator+(Vec2Int a, i32 b)
-{
-    Vec2Int r = { a.x + b, a.y + b};
-    return r;
-}
-MATH_PREFIX Vec2Int operator+(i32 a, Vec2Int b)
-{
-    Vec2Int r = { a + b.x, a + b.y };
-    return r;
-}
-MATH_PREFIX Vec2Int operator-(Vec2Int a, i32 b)
-{
-    Vec2Int r = { a.x - b, a.y - b};
-    return r;
-}
-
-
-MATH_PREFIX bool operator==(Vec2Int a, Vec2Int b)
-{
-    return ((a.x == b.x) && (a.y == b.y));
-}
-MATH_PREFIX bool operator>(Vec2Int a, Vec2Int b)
-{
-    return ((a.x > b.x) && (a.y > b.y));
-}
-MATH_PREFIX bool operator<(Vec2Int a, Vec2Int b)
-{
-    return ((a.x < b.x) && (a.y < b.y));
-}
-MATH_PREFIX bool operator>=(Vec2Int a, Vec2Int b)
-{
-    return ((a.x >= b.x) && (a.y >= b.y));
-}
-MATH_PREFIX bool operator<=(Vec2Int a, Vec2Int b)
-{
-    return ((a.x <= b.x) && (a.y <= b.y));
-}
-MATH_PREFIX Vec2Int operator-(Vec2Int a, Vec2Int b)
-{
-    Vec2Int r = {a.x - b.x, a.y - b.y };
-    return r;
-}
-MATH_PREFIX Vec2Int operator+(Vec2Int a, Vec2Int b)
-{
-    Vec2Int r = {a.x + b.x, a.y + b.y };
-    return r;
-}
- inline Vec2Int &operator+=(Vec2Int &a, Vec2Int b)
-{
-    return (a = a + b);
-}
-inline Vec2Int &operator-=(Vec2Int &a, Vec2Int b)
-{
-    return (a = a - b);
-}
-MATH_PREFIX Vec2Int operator%(Vec2Int a, Vec2Int b)
-{
-    Vec2Int r = { a.x % b.x, a.y % b.y };
-    return r;
-}
-MATH_PREFIX Vec2Int operator%=(Vec2Int& a, Vec2Int b)
-{
-    a = a % b;
-}
-
-
-MATH_PREFIX Vec3 operator+(float a, Vec3 b)
-{
-    Vec3 r = { a + b.x, a + b.y, a + b.z };
-    return r;
-}
-MATH_PREFIX Vec3 operator-(float a, Vec3 b)
-{
-    Vec3 r = { a - b.x, a - b.y, a - b.z };
-    return r;
-}
-MATH_PREFIX Vec2 operator+(Vec2 a, float b)
-{
-    Vec2 r = { a.x + b, a.y + b };
-    return r;
-}
-MATH_PREFIX Vec2 operator+(float a, Vec2 b)
-{
-    Vec2 r = { a + b.x, a + b.y };
-    return r;
-}
-MATH_PREFIX Vec2 operator-(Vec2 a, float b)
-{
-    Vec2 r = { a.x - b, a.y - b };
-    return r;
-}
-MATH_PREFIX Vec2 operator-(float a, Vec2 b)
-{
-    Vec2 r = { a - b.x, a - b.y };
-    return r;
-}
-
-
 
 template <typename T>
 [[nodiscard]] T Min(const T a, const T b)
@@ -565,11 +366,11 @@ MATH_PREFIX Vec3 Abs(const Vec2& a)
 {
     return { abs(a.x), abs(a.y) };
 }
-MATH_PREFIX Vec3Int Abs(const Vec3Int& a)
+MATH_PREFIX Vec3I Abs(const Vec3I& a)
 {
     return { abs(a.x), abs(a.y), abs(a.z) };
 }
-MATH_PREFIX Vec2Int Abs(const Vec2Int& a)
+MATH_PREFIX Vec2I Abs(const Vec2I& a)
 {
     return { abs(a.x), abs(a.y) };
 }
@@ -716,11 +517,11 @@ MATH_PREFIX float Pythags(const Vec3& a)
 {
     return sqrtf((a.x * a.x) + (a.y * a.y) + (a.z * a.z));
 }
-MATH_PREFIX float Pythags(const Vec2Int& a)
+MATH_PREFIX float Pythags(const Vec2I& a)
 {
     return Pythags(Vec2({ float(a.x), float(a.y) }));
 }
-MATH_PREFIX float Pythags(const Vec3Int& a)
+MATH_PREFIX float Pythags(const Vec3I& a)
 {
     return Pythags(Vec3({ float(a.x), float(a.y), float(a.z) }));
 }
@@ -733,11 +534,11 @@ MATH_PREFIX double DistanceD(const Vec2& a, const Vec2& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX double Distance(const Vec3Int& a, const Vec3Int& b)
+MATH_PREFIX double Distance(const Vec3I& a, const Vec3I& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX double Distance(const Vec2Int& a, const Vec2Int& b)
+MATH_PREFIX double Distance(const Vec2I& a, const Vec2I& b)
 {
     return Pythags(a - b);
 }
@@ -754,11 +555,11 @@ MATH_PREFIX double LengthD(const Vec2& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX double Length(const Vec3Int& a)
+MATH_PREFIX double Length(const Vec3I& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX double Length(const Vec2Int& a)
+MATH_PREFIX double Length(const Vec2I& a)
 {
     return Pythags(a);
 }
@@ -812,25 +613,25 @@ MATH_PREFIX float RandomFloat(const float min, const float max)
     return min + (max - min) * (rand() / float(RAND_MAX));
 }
 
-MATH_PREFIX Vec3Int ToVec3Int(const Vec3& a)
+MATH_PREFIX Vec3I ToVec3I(const Vec3& a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(a.z) };
 }
-MATH_PREFIX Vec3    ToVec3(const Vec3Int& a)
+MATH_PREFIX Vec3  ToVec3(const Vec3I& a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z) };
 }
-MATH_PREFIX Vec2Int ToVec2Int(const Vec2& a)
+MATH_PREFIX Vec2I ToVec2I(const Vec2& a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y) };
 }
-MATH_PREFIX Vec2    ToVec2(const Vec2Int& a)
+MATH_PREFIX Vec2  ToVec2(const Vec2I& a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y) };
 }
 
 //Multiplication of two vectors without adding each dimension to get the dot product
-MATH_PREFIX Vec3Int HadamardProduct(const Vec3Int& a, const Vec3Int& b)
+MATH_PREFIX Vec3I HadamardProduct(const Vec3I& a, const Vec3I& b)
 {
     return { a.x * b.x, a.y * b.y, a.z * b.z };
 }
@@ -865,7 +666,7 @@ struct AABB {
     [[nodiscard]] Vec3 Center() const
     {
         Vec3 result = {};
-        result = min + ((max - min) / 2);
+        result = min + ((max - min) / 2.0f);
         return result;
     }
 };
@@ -1011,14 +812,14 @@ union Triangle {
     }
     Vec3 Center() const
     {
-        Vec3 r = (p0 + p1 + p2) / 3;
+        Vec3 r = (p0 + p1 + p2) / 3.0f;
         return r;
     }
 };
 
 Frustum ComputeFrustum(const Mat4& mvProj);
 bool IsBoxInFrustum(const Frustum& f, float* bmin, float* bmax);
-i32 ManhattanDistance(Vec3Int a, Vec3Int b);
+i32 ManhattanDistance(Vec3I a, Vec3I b);
 
 
 //Vec3 ClosestPointOnLineSegment(const Vec3& A, const Vec3& B, const Vec3& Point);

@@ -207,7 +207,7 @@ void CheckFrameBufferStatus()
     }
 }
 
-void FrameBufferUpdate(const Vec2Int& size)
+void FrameBufferUpdate(const Vec2I& size)
 {
     if (size == g_renderer.size)
     {
@@ -219,7 +219,7 @@ void FrameBufferUpdate(const Vec2Int& size)
 
 double s_last_shader_update_time= 0;
 double s_incremental_time= 0;
-void RenderUpdate(Vec2Int windowSize, float deltaTime)
+void RenderUpdate(Vec2I windowSize, float deltaTime)
 {
     ZoneScopedN("Render Update");
     CheckFrameBufferStatus();
@@ -242,7 +242,7 @@ void RenderUpdate(Vec2Int windowSize, float deltaTime)
     FrameBufferUpdate(windowSize);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    Vec2Int drawable_size;
+    Vec2I drawable_size;
     SDL_GL_GetDrawableSize(g_renderer.SDL_Context, &drawable_size.x, &drawable_size.y);
     glViewport(0, 0, drawable_size.x, drawable_size.y);
 }
@@ -475,7 +475,7 @@ void ShaderProgram::UpdateUniformFloatStream(const char* name, GLsizei count, co
 #endif
 }
 
-void ShaderProgram::UpdateUniformInt2(const char* name, Vec2Int values) { UpdateUniformInt2(name, GLint(values.x), GLint(values.y)); }
+void ShaderProgram::UpdateUniformInt2(const char* name, Vec2I values) { UpdateUniformInt2(name, GLint(values.x), GLint(values.y)); }
 void ShaderProgram::UpdateUniformInt2(const char* name, GLint value1, GLint value2)
 {
     GLint loc = glGetUniformLocation(m_handle, name);
@@ -486,7 +486,7 @@ void ShaderProgram::UpdateUniformInt2(const char* name, GLint value1, GLint valu
 #endif
 }
 
-void ShaderProgram::UpdateUniformInt3(const char* name, Vec3Int v)
+void ShaderProgram::UpdateUniformInt3(const char* name, Vec3I v)
 {
     GLint loc = glGetUniformLocation(m_handle, name);
     //glUniform1f(loc, value);

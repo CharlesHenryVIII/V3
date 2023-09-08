@@ -139,9 +139,9 @@ Texture::Texture(const char* fileLocation, GLint colorFormat)
 #endif
 }
 
-Texture::Texture(u8* data, Vec2Int size, GLint colorFormat)//, int32 m_bytesPerPixel)
+Texture::Texture(u8* data, Vec2I size, GLint colorFormat)//, int32 m_bytesPerPixel)
 {
-    m_size = Vec3Int({ size.x, size.y, 0 });
+    m_size = Vec3I({ size.x, size.y, 0 });
     m_bytesPerPixel = 4;
 
     glGenTextures(1, &m_handle);

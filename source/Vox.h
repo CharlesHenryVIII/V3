@@ -7,7 +7,7 @@
 
 struct Vertex_Voxel;
 struct VoxelMesh {
-    std::vector<Vec3Int> sizes;
+    std::vector<Vec3I> sizes;
     std::vector<std::vector<Vertex_Voxel>> vertices;
     std::vector<std::vector<u32>> indices;
 };
@@ -43,7 +43,7 @@ struct Vertex_Voxel {
 struct VoxData {
     U32Pack                     color_palette[VOXEL_PALETTE_MAX];
     std::vector<VoxelBlockData> color_indices;
-    Vec3Int                     size;
+    Vec3I                       size;
 };
 #pragma pack(pop)
 

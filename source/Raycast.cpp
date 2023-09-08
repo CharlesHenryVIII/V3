@@ -2,7 +2,7 @@
 #include "Misc.h"
 #include "Vox.h"
 
-//Vec3Int GetVoxelPosFromRayPos(Vec3& p, const Vec3& ray_direction)
+//Vec3I GetVoxelPosFromRayPos(Vec3& p, const Vec3& ray_direction)
 //{
 //#if 1
 //    const float epsilon = 0.00001f;
@@ -22,7 +22,7 @@
 //            p.z = rounded;
 //    }
 //#endif
-//    Vec3Int voxel_p = Vec3ToVec3Int(Floor(p));
+//    Vec3I voxel_p = Vec3ToVec3I(Floor(p));
 //    voxel_p.x = (ray_direction.x < 0) ? voxel_p.x - 1 : voxel_p.x;
 //    voxel_p.y = (ray_direction.y < 0) ? voxel_p.y - 1 : voxel_p.y;
 //    voxel_p.z = (ray_direction.z < 0) ? voxel_p.z - 1 : voxel_p.z;
@@ -105,9 +105,9 @@
 //#endif
 //        }
 //        //Vec3 epsilon_check = p - Abs(p);
-//        //Vec3Int voxel_p = Vec3ToVec3Int(Floor(p));
+//        //Vec3I voxel_p = Vec3ToVec3I(Floor(p));
 //        Vec3 new_p = p;
-//        Vec3Int voxel_p = GetVoxelPosFromRayPos(new_p, ray.direction);
+//        Vec3I voxel_p = GetVoxelPosFromRayPos(new_p, ray.direction);
 //        if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
 //            continue;
 //        if (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z)
@@ -157,10 +157,10 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
     step.x = ray.direction.x >= 0 ? 1.0f : -1.0f;
     step.y = ray.direction.y >= 0 ? 1.0f : -1.0f;
     step.z = ray.direction.z >= 0 ? 1.0f : -1.0f;
-    const Vec3 pClose = Floor((Round(ray.origin + (step / 2))));
+    const Vec3 pClose = Floor((Round(ray.origin + (step / 2.0f))));
     Vec3 tMax = Abs((pClose - ray.origin) / ray.direction);
     const Vec3 tDelta = Abs(1.0f / ray.direction);
-    Vec3Int voxel_p;
+    Vec3I voxel_p;
 
     while (!result.success) 
     {
@@ -187,7 +187,7 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
             result.normal.z = -step.z;
         }
 
-        voxel_p = ToVec3Int(Floor(p));
+        voxel_p = ToVec3I(Floor(p));
         assert(voxels.color_indices.size() == 1);
 #if 1
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
@@ -227,7 +227,7 @@ RaycastResult VoxelLinecast(const Ray& ray, VoxData voxels, float length)
     step.x = ray.direction.x >= 0 ? 1.0f : -1.0f;
     step.y = ray.direction.y >= 0 ? 1.0f : -1.0f;
     step.z = ray.direction.z >= 0 ? 1.0f : -1.0f;
-    const Vec3 pClose = Floor((Round(ray.origin + (step / 2))));
+    const Vec3 pClose = Floor((Round(ray.origin + (step / 2.0f))));
     Vec3 tMax = Abs((pClose - ray.origin) / ray.direction);
     const Vec3 tDelta = Abs(1.0f / ray.direction);
 
@@ -258,7 +258,7 @@ RaycastResult VoxelLinecast(const Ray& ray, VoxData voxels, float length)
             result.normal.z = -step.z;
         }
 
-        Vec3Int voxel_p = ToVec3Int(Floor(p));
+        Vec3I voxel_p = ToVec3I(Floor(p));
         assert(voxels.color_indices.size() == 1);
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
             continue;
@@ -347,7 +347,7 @@ RaycastResult RayVsAABB(const Ray& ray, const AABB& box)
     return r;
 }
 
-Ray MouseToRaycast(const Vec2Int& pixel_pos, const Vec2Int& screen_size, const Vec3& camera_pos, const Mat4& view_from_projection, const Mat4& world_from_view)
+Ray MouseToRaycast(const Vec2I& pixel_pos, const Vec2I& screen_size, const Vec3& camera_pos, const Mat4& view_from_projection, const Mat4& world_from_view)
 {
     //To Normalized Device Coordinates
     //The top left of the monitor is the origin: { -1, -1 }

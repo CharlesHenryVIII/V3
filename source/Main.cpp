@@ -1,4 +1,3 @@
-#define GB_MATH_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #include "GL/glew.h"
 #include <SDL.h>
@@ -88,8 +87,6 @@ void InitializeImGui()
 
 int main(int argc, char* argv[])
 {
-    gbVec2 a = { 1, 2 };
-    +a;
     //Initilizers
     InitializeVideo();
     InitializeImGui();
@@ -510,7 +507,7 @@ int main(int argc, char* argv[])
 #endif
 #endif
 
-            //AddCubeToRender(aabb.Center(), transOrange, Vec3IntToVec3(voxels.size));
+            //AddCubeToRender(aabb.Center(), transOrange, Vec3IToVec3(voxels.size));
             
             if (showIMGUI)
             {

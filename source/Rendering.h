@@ -40,9 +40,9 @@ public:
     void UpdateUniformVec2(const char* name, GLsizei count, const GLfloat* value);
     void UpdateUniformFloat(const char* name, GLfloat value);
     void UpdateUniformFloatStream(const char* name, GLsizei count, const GLfloat* value);
-    void UpdateUniformInt2(const char* name, Vec2Int values);
+    void UpdateUniformInt2(const char* name, Vec2I values);
     void UpdateUniformInt2(const char* name, GLint value1, GLint value2);
-    void UpdateUniformInt3(const char* name, Vec3Int v);
+    void UpdateUniformInt3(const char* name, Vec3I v);
     void UpdateUniformUint8(const char* name, GLuint value);
     void UpdateUniformUintStream(const char* name, GLsizei count, GLuint* values);
 
@@ -128,8 +128,8 @@ struct Renderer {
     i32 swapInterval = SwapInterval_VSync;
     //float maxAnisotropic;
     //float currentAnisotropic = 1.0f;
-    Vec2Int size;
-    Vec2Int pos;
+    Vec2I size;
+    Vec2I pos;
     ShaderProgram*  shaders[+Shader::Count] = {};
     Texture*        textures[Texture::Count] = {};
 
@@ -149,7 +149,7 @@ void DepthWrite(bool status);
 void DepthRead(bool status);
 //NOTE(CSH): DOES THIS NEED TO BE EXPOSED?
 void CheckFrameBufferStatus();
-void RenderUpdate(Vec2Int windowSize, float deltaTime);
+void RenderUpdate(Vec2I windowSize, float deltaTime);
 
 enum class MessageBoxType {
     Invalid,

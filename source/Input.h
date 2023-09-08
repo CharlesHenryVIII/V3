@@ -16,8 +16,8 @@ struct Key {
 };
 
 struct Mouse {
-    Vec2Int pos = {}; //origin is the bottom left of the window
-    Vec2Int pDelta = {};
+    Vec2I pos = {}; //origin is the bottom left of the window
+    Vec2I pDelta = {};
     Vec2 wheel = {}; //Y for vertical rotations, X for Horizontal rotations/movement
     Vec2 wheelInstant = {};
     bool wheelModifiedLastFrame = false;

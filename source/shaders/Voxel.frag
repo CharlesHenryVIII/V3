@@ -15,6 +15,7 @@ uniform vec3    u_camera_position;
 const float FLT_INF     = 1.0 / 0.0;
 const float FLT_MIN     = 1.175494351e-38;
 const float FLT_EPSILON = 1.192092896e-07;
+//const float FLT_EPSILON = 0.01;
 
 ivec3 MagicaToTexelFetch(ivec3 a)
 {
@@ -76,7 +77,7 @@ struct RaycastResult {
     vec3 normal;
 };
 
-RaycastResult Linecast(const Ray ray, float ray_length)
+RaycastResult Linecast(const Ray ray, float ray_length, vec3 normal)
 {
     RaycastResult result;
     result.color_index  = 0;
@@ -93,7 +94,14 @@ RaycastResult Linecast(const Ray ray, float ray_length)
     const vec3 pClose = floor((round(ray.origin + (step / 2))));
     vec3 tMax = abs((pClose - ray.origin) / ray.direction);
     const vec3 tDelta = abs(1.0 / ray.direction);
-    ivec3 voxel_p;
+    ivec3 voxel_p = ivec3(floor(p));
+
+    if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
+        return result;
+    if (voxel_p.x >= u_voxel_size.x || voxel_p.y >= u_voxel_size.y || voxel_p.z >= u_voxel_size.z)
+        return result;
+    result.normal = normal;
+    result.color_index = GetIndexFromGameVoxelPosition(voxel_p);
 
     
     while (result.color_index == 0)
@@ -104,13 +112,13 @@ RaycastResult Linecast(const Ray ray, float ray_length)
         }
 
         result.normal = vec3(0);
-        if (tMax.x < tMax.y && tMax.x < tMax.z)
+        if (tMax.x <= tMax.y && tMax.x <= tMax.z)
         {
             p.x += step.x;
             tMax.x += tDelta.x;
             result.normal.x = -step.x;
         }
-        else if (tMax.y < tMax.x && tMax.y < tMax.z)
+        else if (tMax.y <= tMax.x && tMax.y <= tMax.z)
         {
             p.y += step.y;
             tMax.y += tDelta.y;
@@ -125,9 +133,9 @@ RaycastResult Linecast(const Ray ray, float ray_length)
 
         voxel_p = ivec3(floor(p));
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
-            continue;
+            return result;
         if (voxel_p.x >= u_voxel_size.x || voxel_p.y >= u_voxel_size.y || voxel_p.z >= u_voxel_size.z)
-            continue;
+            return result;
         result.color_index = GetIndexFromGameVoxelPosition(voxel_p);
     }
     
@@ -135,7 +143,6 @@ RaycastResult Linecast(const Ray ray, float ray_length)
     const float voxel = ray.direction[comp] < 0 ? float(voxel_p[comp]) + 1.0f : float(voxel_p[comp]);
     const float t = (voxel - ray.origin[comp]) / ray.direction[comp];
     result.p = ray.origin + ray.direction * t;
-    //result.p = vec3(voxel_p);
 
     result.distance_mag = t;
     return result;
@@ -223,7 +230,7 @@ RaycastResult RayVsAABB(const Ray ray, const AABB box)
 vec3 ReflectRay(const vec3 dir, const vec3 normal)
 {
     vec3 result;
-#if 1
+#if 0
     result = -(2 * (dot(normal, dir) * normal - dir));
 #else
     result = dir;
@@ -243,21 +250,48 @@ vec3 ReflectRay(const vec3 dir, const vec3 normal)
     return result;
 }
 
+RaycastResult RayVsVoxel(const Ray ray)
+{
+    AABB box = AABB(vec3(0), vec3(u_voxel_size.x, u_voxel_size.y, u_voxel_size.z ));
+    RaycastResult aabb_result = RayVsAABB(ray, box);
+
+    RaycastResult linecast_result;
+    linecast_result.color_index = 0;
+
+    if (aabb_result.color_index != 0)
+    {
+        vec3 clamped_ray;
+        //NOTE: Setting the clamped_ray to zero results in the voxel position to be off by 1.
+        //May be some sort of floating point error...
+        clamped_ray.x = abs(aabb_result.p.x) <= 0.0001 ? 0.0001 : aabb_result.p.x;
+        clamped_ray.y = abs(aabb_result.p.y) <= 0.0001 ? 0.0001 : aabb_result.p.y;
+        clamped_ray.z = abs(aabb_result.p.z) <= 0.0001 ? 0.0001 : aabb_result.p.z;
+
+        clamped_ray.x = abs(clamped_ray.x - u_voxel_size.x) <= 0.0001 ? u_voxel_size.x - 0.00001 : clamped_ray.x;
+        clamped_ray.y = abs(clamped_ray.y - u_voxel_size.y) <= 0.0001 ? u_voxel_size.y - 0.00001 : clamped_ray.y;
+        clamped_ray.z = abs(clamped_ray.z - u_voxel_size.z) <= 0.0001 ? u_voxel_size.z - 0.00001 : clamped_ray.z;
+        Ray linecast_ray = Ray( clamped_ray, ray.direction );
+        linecast_result = Linecast(linecast_ray, 1000.0, aabb_result.normal);
+    }
+    return linecast_result;
+}
+
 void main()
 {
 
     Ray ray = PixelToRay(ivec2(gl_FragCoord.xy));
 
-#if 1
+#if 1 //dont use the experimental aabb bounds checking
+#if 0 //use basic single ray hit
 
-#if 1
-    RaycastResult ray_voxel = Linecast(ray, 1000.0);
-    if (ray_voxel.color_index != 0)
+
+    RaycastResult ray_voxel_result = RayVsVoxel(ray);
+    if (ray_voxel_result.color_index != 0)
     {
 
-        vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index), 0);
+        vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel_result.color_index), 0);
         color.xyz = voxel_color.xyz;
-        vec3 dist = min(mod(ray_voxel.p, 1), 1.0 - mod(ray_voxel.p, 1));
+        //vec3 dist = min(mod(ray_voxel.p, 1), 1.0 - mod(ray_voxel.p, 1));
 
         //NOTE: Draw voxel hit position
         //color.xyz = vec3(ray_voxel.p / vec3(u_voxel_size));
@@ -285,53 +319,64 @@ void main()
     }
     else
     {
+#if 1
+        discard;
+#else
         color = vec4(0, 0, 0, 1);
-        //discard;
+#endif
     }
 
 #else
-#define RAY_BOUNCES 3
+#define RAY_BOUNCES 5
     RaycastResult voxel_rays[RAY_BOUNCES];
     for (int i = 0; i < RAY_BOUNCES; i++)
     {
-        voxel_rays[i] = Linecast(ray, 1000.0);
+        voxel_rays[i] = RayVsVoxel(ray);
         if (voxel_rays[i].color_index != 0) 
         {
-            ray.origin = voxel_rays[i].p;
             ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
+            ray.origin = voxel_rays[i].p + ray.direction * 0.001;
+            //ray.origin = voxel_rays[i].p;
         }
-        else
-        {
-            break;
-        }
+        //else
+        //{
+        //    break;
+        //}
     }
+    color.a = 1;
+    color.xyz = voxel_rays[0].normal;
+    if (voxel_rays[0].color_index == 0)
+        discard;
     const vec4 ambient = vec4(0.1, 0.1, 0.1, 1);
-    vec4 color = vec4(0);
-    color.a = 1.0;
+    vec4 c = vec4(0);
+    c.a = 1.0;
+    c = ambient;
     for (int i = RAY_BOUNCES - 1; i >= 0; i--)
     {
-        if (voxel_rays[i].color_index)
+        if (voxel_rays[i].color_index != 0)
         {
-            if (i == 2)
-            {
-                c = ambient;//vec4(0, 0, 0, 1);
-                //AddCubeToRender(voxel_rays[i].p, c, 0.5);
-            }
-            else
-            {
-                ColorInt a;
-                vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index));
-                c.r *= voxel_color.r / (i + 1);
-                c.g *= voxel_color.g / (i + 1);
-                c.b *= voxel_color.b / (i + 1);
-                AddCubeToRender(voxel_rays[i].p, c, 0.5f);
-            }
+            vec4 voxel_color = texelFetch(voxel_color_palette, int(voxel_rays[i].color_index), 0);
+#if 1
+            c.r = c.r * voxel_color.r;
+            c.g = c.g * voxel_color.g;
+            c.b = c.b * voxel_color.b;
+#else
+            c.r = c.r * (voxel_color.r / (i + 1));
+            c.g = c.g * (voxel_color.g / (i + 1));
+            c.b = c.b * (voxel_color.b / (i + 1));
+#endif
         }
         else
         {
             c = vec4(1);
         }
     }
+    //if (c == vec4(1))
+        //discard;
+    color = c;//max(c, ambient);
+    //color.xyz = abs(voxel_rays[0].normal);
+    //color = vec4(0, 0, 0, 1);
+    //return;
 
     //if (ray_voxel.color_index != 0)
     //{

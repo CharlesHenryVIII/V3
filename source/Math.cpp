@@ -1,4 +1,3 @@
-#define GB_MATH_IMPLEMENTATION
 #include "Math.h"
 
 //uint32 PCG32_Random_R(uint64& state, uint64& inc)

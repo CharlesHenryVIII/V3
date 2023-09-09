@@ -21,10 +21,11 @@ using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 
-union Color {
-    struct { float r, g, b, a; };
-    float e[4];
-};
+typedef gbVec4<float> Color;
+//union Color {
+//    struct { float r, g, b, a; };
+//    float e[4];
+//};
 
 union ColorInt {
     u32 rgba;
@@ -225,6 +226,25 @@ struct Rectangle_Int {
         return topRight.y - bottomLeft.y;
     }
 };
+
+template<typename T> inline bool operator> (gbVec2<T> a, gbVec2<T> b) { return (a.x >  b.x) && (a.y >  b.y); }
+template<typename T> inline bool operator>=(gbVec2<T> a, gbVec2<T> b) { return (a.x >= b.x) && (a.y >= b.y); }
+
+template<typename T> inline bool operator< (gbVec2<T> a, gbVec2<T> b) { return (a.x <  b.x) && (a.y <  b.y); }
+template<typename T> inline bool operator<=(gbVec2<T> a, gbVec2<T> b) { return (a.x <= b.x) && (a.y <= b.y); }
+
+template<typename T> inline bool operator> (gbVec3<T> a, gbVec3<T> b) { return (a.x >  b.x) && (a.y >  b.y) && (a.z >  b.z); }
+template<typename T> inline bool operator>=(gbVec3<T> a, gbVec3<T> b) { return (a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z); }
+
+template<typename T> inline bool operator< (gbVec3<T> a, gbVec3<T> b) { return (a.x <  b.x) && (a.y <  b.y) && (a.z <  b.z); }
+template<typename T> inline bool operator<=(gbVec3<T> a, gbVec3<T> b) { return (a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z); }
+
+template<typename T> inline bool operator> (gbVec4<T> a, gbVec4<T> b) { return (a.x >  b.x) && (a.y >  b.y) && (a.z >  b.z) && (a.w >  a.w); }
+template<typename T> inline bool operator>=(gbVec4<T> a, gbVec4<T> b) { return (a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z) && (a.w >= a.w); }
+
+template<typename T> inline bool operator< (gbVec4<T> a, gbVec4<T> b) { return (a.x <  b.x) && (a.y <  b.y) && (a.z <  b.z) && (a.w <  a.w); }
+template<typename T> inline bool operator<=(gbVec4<T> a, gbVec4<T> b) { return (a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z) && (a.w <= a.w); }
+
 
 //inline Vec2 operator-(const Vec2& v)
 //{

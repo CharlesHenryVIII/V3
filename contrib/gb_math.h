@@ -65,7 +65,7 @@ CONTENTS
     #include <intrin.h>
 #endif
 
-#define GB_MATH_DEF
+#define GB_MATH_DEF [[nodiscard]]
 
 #if defined(_MSC_VER)
 #pragma warning(push)

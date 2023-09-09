@@ -1,4 +1,5 @@
 #define STB_IMAGE_IMPLEMENTATION
+#define GB_MATH_IMPLEMENTATION
 #include "GL/glew.h"
 #include <SDL.h>
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -25,7 +26,7 @@
 #include <vector>
 //#include <algorithm>
 
-#define RASTERIZED_RENDERING 1
+#define RASTERIZED_RENDERING 0
 
 template <typename T>
 void GenericImGuiTable(const std::string& title, const std::string& fmt, T* firstValue, i32 length = 3)
@@ -427,88 +428,99 @@ int main(int argc, char* argv[])
             Mat4 view_from_world        = gb_mat4_look_at(camera_pos_world, camera_look_at_target, { 0,1,0 });
             Mat4 view_from_projection   = gb_mat4_inverse(projection_from_view);
             Mat4 world_from_view        = gb_mat4_inverse(view_from_world);
-
-#if 1
-            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, view_from_projection, world_from_view);
-            AABB aabb = {
-                .min = {},
-                .max = ToVec3(voxels.size),
-            };
-            RaycastResult rr = RayVsAABB(ray, aabb);
-            RaycastResult lc = {};
-            if (rr.success)
-            {
-#if 1
-                Ray linecast_ray = { rr.p, ray.direction };
-                //RaycastResult lc = LineCast(ray, voxels, INFINITY);
-                //lc = LineCast(ray, voxels, 1000.0f);
-                lc = Linecast(ray, voxels, 1000.0f);
-                if (lc.success)
-                {
-                    //AddCubeToRender(lc.p, transPurple, 1.1f);
-                    AddCubeToRender(lc.p, transPurple, 0.5f);
-                }
-            }
-#else
-                
-                Ray linecast_ray = { rr.p, ray.direction };
-                //RaycastResult lc = LineCast(ray, voxels, INFINITY);
-                //lc = LineCast(ray, voxels, 1000.0f);
-                RaycastResult voxel_rays[3] = {};
-                for (i32 i = 0; i < 3; i++)
-                {
-                    voxel_rays[i] = Linecast(ray, voxels, 1000.0f);
-                    if (voxel_rays[i].success)
-                    {
 #if 0
-                        Color c = {};
-                        c.e[i] = 1.0f;
-                        c.a = 0.5f;
-                        AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+            //Testing broken linecasting
+            projection_from_view = {
+             0.562500715f,  0.00000000f,   0.00000000f,   0.00000000f,
+             0.00000000f,   1.00000131f,   0.00000000f,   0.00000000f,
+             0.00000000f,   0.00000000f,  -1.00200200f,  -1.00000000f,
+             0.00000000f,   0.00000000f,  -2.00200200f,   0.00000000f
+            };
+
+            view_from_world = {
+             0.252490938f,  0.225881487f, -0.940864384f,  0.00000000f,
+            -0.00000000f,   0.972369909f,  0.233445287f,  0.00000000f,
+             0.967599273f, -0.0589428209f, 0.245514587f,  0.00000000f,
+            -27.1199570f,  -3.91920853f,   2.30917740f,   1.00000000f
+            };
+
+            world_from_view = {
+             0.252490938f, -0.00000000f,   0.967599332f, -0.00000000f,
+             0.225881517f,  0.972370028f, -0.0589428283f, 0.00000000f,
+            -0.940864563f,  0.233445331f,  0.245514616f, -0.00000000f,
+             9.90544319f,   3.27185416f,   25.4433079f,   1.00000000f
+            };
+
+            view_from_projection = {
+             1.77777553f,  0.00000000f,   -0.00000000f,   0.00000000f,
+             0.00000000f,  0.999998689f,   0.00000000f,  -0.00000000f,
+            -0.00000000f,  0.00000000f,   -0.00000000f,  -0.499499977f,
+             0.00000000f, -0.00000000f,   -1.00000000f,   0.500500023f
+            };
+
+            camera_pos_world = { 9.90544319f, 3.27185392f, 25.4433041f };
+
+            Ray ray_working = MouseToRaycast({ 557, 587 }, g_renderer.size, camera_pos_world, view_from_projection, world_from_view);
+            Ray ray_broken  = MouseToRaycast({ 557, 588 }, g_renderer.size, camera_pos_world, view_from_projection, world_from_view);
+
+            RaycastResult working = Linecast(ray_working, voxels, 1000.0f);
+            RaycastResult broken  = Linecast(ray_broken, voxels, 1000.0f);
 #endif
-                        ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
-                        ray.origin = voxel_rays[i].p + ray.direction * 0.01f;
-                    }
-                }
-                Color c = {};
-                c.a = 1.0f;
-                for (i32 i = 2; i >= 0; i--)
-                {
-                    if (voxel_rays[i].success)
-                    {
-                        if (i == 2)
-                        {
-                            c = {};
-                            c.a = 1.0f;
-                            AddCubeToRender(voxel_rays[i].p, c, 0.5f);
-                        }
-                        else
-                        {
-                            ColorInt a;
-                            a.rgba = voxels.color_palette[voxel_rays[i].success].rgba;
-                            Color temp = ToColor(a);
-                            c.r *= temp.r / (i + 1);
-                            c.g *= temp.g / (i + 1);
-                            c.b *= temp.b / (i + 1);
-                            AddCubeToRender(voxel_rays[i].p, c, 0.5f);
-                        }
-                    }
-                    else
-                    {
-                        c.r = 1.0f;
-                        c.g = 1.0f;
-                        c.b = 1.0f;
-                    }
-                }
+
+            Ray ray = MouseToRaycast(playerInput.mouse.pos, g_renderer.size, camera_pos_world, view_from_projection, world_from_view);
+#if 0
+            RaycastResult voxel_hit_result = RayVsVoxel(ray, voxels);
+            if (voxel_hit_result.success)
+                AddCubeToRender(voxel_hit_result.p, transPurple, 0.25f);
+
                 
-                lc = voxel_rays[0];
+#else
+#define RAY_BOUNCES 3
+            RaycastResult voxel_rays[RAY_BOUNCES] = {};
+            for (i32 i = 0; i < RAY_BOUNCES; i++)
+            {
+                voxel_rays[i] = RayVsVoxel(ray, voxels);
+                if (voxel_rays[i].success)
+                {
+#if 0
+                    Color c = {};
+                    c.e[i] = 1.0f;
+                    c.a = 0.5f;
+                    AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+#endif
+                    ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
+                    ray.origin = voxel_rays[i].p + ray.direction * 0.0001f;
+                }
+            }
+            Color c = {};
+            c.a = 1.0f;
+            c = { 0.1f, 0.1f, 0.1f, 1.0f };
+            //c = { 1.0f, 1.0f, 1.0f, 1.0f };
+            for (i32 i = RAY_BOUNCES - 1; i >= 0; i--)
+            {
+                if (voxel_rays[i].success)
+                {
+                    ColorInt a;
+                    a.rgba = voxels.color_palette[voxel_rays[i].success].rgba;
+                    Color temp = ToColor(a);
+                    //c.r *= temp.r / (i + 1);
+                    //c.g *= temp.g / (i + 1);
+                    //c.b *= temp.b / (i + 1);
+                    c = c * temp;
+                    AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+                }
+                else
+                {
+                    c.r = 1.0f;
+                    c.g = 1.0f;
+                    c.b = 1.0f;
+                }
             }
 
-#endif
+            RaycastResult voxel_hit_result = voxel_rays[0];
+
 #endif
 
-            //AddCubeToRender(aabb.Center(), transOrange, Vec3IToVec3(voxels.size));
-            
             if (showIMGUI)
             {
                 ZoneScopedN("ImGui Update");
@@ -544,6 +556,7 @@ int main(int argc, char* argv[])
                             ImGui::TableSetupColumn("Z");
                             ImGui::TableHeadersRow();
 
+                            float framerate = 1 / deltaTime;
                             GenericImGuiTable("Camera_dis",     "%+08.2f",  &camera_dis, 1);
                             GenericImGuiTable("Camera_yaw",     "%+08.2f",  &camera_yaw, 1);
                             GenericImGuiTable("Camera_pitch",   "%+08.2f",  &camera_pitch, 1);
@@ -551,8 +564,9 @@ int main(int argc, char* argv[])
                             GenericImGuiTable("Camera_look_at", "%+08.2f",  camera_look_at_target.e);
                             GenericImGuiTable("Camera_world",   "%+08.2f",  camera_pos_world.e);
                             GenericImGuiTable("delta_time",     "%+08.8f",  &deltaTime, 1);
-                            GenericImGuiTable("hit_pos",        "%+08.2f",  lc.p.e);
-                            GenericImGuiTable("hit_suc",        "%i",       &lc.success, 1);
+                            GenericImGuiTable("framerate",      "%+08.8f",  &framerate, 1);
+                            GenericImGuiTable("hit_pos",        "%+08.2f",  voxel_hit_result.p.e);
+                            GenericImGuiTable("hit_suc",        "%i",       &voxel_hit_result.success, 1);
                             GenericImGuiTable("mouse_pos",      "%i",       playerInput.mouse.pos.e, 2);
                             GenericImGuiTable("ray_dir",        "%+08.2f",  ray.direction.e);
 

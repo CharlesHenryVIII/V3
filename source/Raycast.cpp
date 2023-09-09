@@ -147,7 +147,7 @@ Vec3 ReflectRay(const Vec3& dir, const Vec3& normal)
     return result;
 }
 
-RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
+RaycastResult Linecast(const Ray& ray, VoxData voxels, float length, Vec3 normal)
 {
     assert(length >= 0.0f);
     RaycastResult result = {};
@@ -160,7 +160,14 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
     const Vec3 pClose = Floor((Round(ray.origin + (step / 2.0f))));
     Vec3 tMax = Abs((pClose - ray.origin) / ray.direction);
     const Vec3 tDelta = Abs(1.0f / ray.direction);
-    Vec3I voxel_p;
+    Vec3I voxel_p = ToVec3I(Floor(p));
+
+    if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
+        return result;
+    if (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z)
+        return result;
+    result.normal = normal;
+    result.success = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
 
     while (!result.success) 
     {
@@ -168,13 +175,13 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
             return result;
 
         result.normal = {};
-        if (tMax.x < tMax.y && tMax.x < tMax.z)
+        if (tMax.x <= tMax.y && tMax.x <= tMax.z)
         {
             p.x += step.x;
             tMax.x += tDelta.x;
             result.normal.x = -step.x;
         }
-        else if (tMax.y < tMax.x && tMax.y < tMax.z)
+        else if (tMax.y <= tMax.x && tMax.y <= tMax.z)
         {
             p.y += step.y;
             tMax.y += tDelta.y;
@@ -189,21 +196,10 @@ RaycastResult Linecast(const Ray& ray, VoxData voxels, float length)
 
         voxel_p = ToVec3I(Floor(p));
         assert(voxels.color_indices.size() == 1);
-#if 1
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
-            continue;
+            return result;
         if (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z)
-            continue;
-#else
-        if ((voxel_p.x <= 0 || voxel_p.y <= 0 || voxel_p.z <= 0) ||
-            (voxel_p.x >= voxels.size.x || voxel_p.y >= voxels.size.y || voxel_p.z >= voxels.size.z))
-        {
-            float dotp = DotProduct(ray.direction, result.normal);
-            if (dotp > 0)
-                break;
-            continue;
-        }
-#endif
+            return result;
         result.success = voxels.color_indices[0].e[voxel_p.x][voxel_p.y][voxel_p.z];
     }
     
@@ -345,6 +341,30 @@ RaycastResult RayVsAABB(const Ray& ray, const AABB& box)
 
     r.success = true;
     return r;
+}
+
+RaycastResult RayVsVoxel(const Ray& ray, const VoxData& voxels)
+{
+    AABB aabb = {
+        .min = {},
+        .max = ToVec3(voxels.size),
+    };
+    RaycastResult aabb_result = RayVsAABB(ray, aabb);
+    RaycastResult linecast_result = {};
+    if (aabb_result.success)
+    {
+        Vec3 clamped_ray;
+        clamped_ray.x = abs(aabb_result.p.x) <= 0.0001f ? 0.0f : aabb_result.p.x;
+        clamped_ray.y = abs(aabb_result.p.y) <= 0.0001f ? 0.0f : aabb_result.p.y;
+        clamped_ray.z = abs(aabb_result.p.z) <= 0.0001f ? 0.0f : aabb_result.p.z;
+
+        clamped_ray.x = abs(clamped_ray.x - voxels.size.x) <= 0.0001f ? voxels.size.x - 0.00001f : clamped_ray.x;
+        clamped_ray.y = abs(clamped_ray.y - voxels.size.y) <= 0.0001f ? voxels.size.y - 0.00001f : clamped_ray.y;
+        clamped_ray.z = abs(clamped_ray.z - voxels.size.z) <= 0.0001f ? voxels.size.z - 0.00001f : clamped_ray.z;
+        Ray linecast_ray = { clamped_ray, ray.direction };
+        linecast_result = Linecast(linecast_ray, voxels, 1000.0f, aabb_result.normal);
+    }
+    return linecast_result;
 }
 
 Ray MouseToRaycast(const Vec2I& pixel_pos, const Vec2I& screen_size, const Vec3& camera_pos, const Mat4& view_from_projection, const Mat4& world_from_view)

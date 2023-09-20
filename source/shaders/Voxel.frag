@@ -42,6 +42,12 @@ uint GetIndexFromGameVoxelPosition(ivec3 p)
     return voxel_index.r;
 }
 
+vec4 GetColorFromIndex(uint i)
+{
+    vec4 vc = texelFetch(voxel_color_palette, int(i), 0);
+    return vc;
+}
+
 struct Ray {
     vec3 origin;
     vec3 direction;
@@ -76,6 +82,11 @@ struct RaycastResult {
     float distance_mag;
     vec3 normal;
 };
+
+ivec3 Vec3ToVoxelPosition(const vec3 p)
+{
+    return ivec3(floor(p));
+}
 
 RaycastResult Linecast(const Ray ray, float ray_length, vec3 normal)
 {
@@ -131,7 +142,7 @@ RaycastResult Linecast(const Ray ray, float ray_length, vec3 normal)
             result.normal.z = -step.z;
         }
 
-        voxel_p = ivec3(floor(p));
+        voxel_p = Vec3ToVoxelPosition(p);
         if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
             return result;
         if (voxel_p.x >= u_voxel_size.x || voxel_p.y >= u_voxel_size.y || voxel_p.z >= u_voxel_size.z)
@@ -276,13 +287,30 @@ RaycastResult RayVsVoxel(const Ray ray)
     return linecast_result;
 }
 
+uint PCG_Random(uint state)
+{
+    return uint((state ^ (state >> 11)) >> (11 + (state >> 30)));
+}
+
+float StackOverflow_Random(vec2 co)
+{
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+#define RAY_BASIC 0
+#define RAY_BOUNCE 1
+#define RAY_LIGHT 2
+#define RAY_LIGHTS 3
+#define RAY_LIGHT_DIR_DOT 4
+#define RAY_METHOD RAY_LIGHT_DIR_DOT
+
 void main()
 {
 
     Ray ray = PixelToRay(ivec2(gl_FragCoord.xy));
 
-#if 1 //dont use the experimental aabb bounds checking
-#if 0 //use basic single ray hit
+#if RAY_METHOD == RAY_BASIC
+//use basic single ray hit
 
 
     RaycastResult ray_voxel_result = RayVsVoxel(ray);
@@ -326,7 +354,8 @@ void main()
 #endif
     }
 
-#else
+#elif RAY_METHOD == RAY_BOUNCE
+
 #define RAY_BOUNCES 5
     RaycastResult voxel_rays[RAY_BOUNCES];
     for (int i = 0; i < RAY_BOUNCES; i++)
@@ -390,64 +419,173 @@ void main()
     //    discard;
     //}
 
-#endif
+#elif RAY_METHOD == RAY_LIGHT
 
+    const vec3 sun_position = vec3(0, 50, 50);
+    const vec3 sun_color    = vec3(1);
+    const vec3 ambient_color= vec3(0.1);
 
-
-
-#else
-    AABB box = AABB(vec3(0), vec3(u_voxel_size.x, u_voxel_size.y, u_voxel_size.z ));
-
-    RaycastResult ray_aabb = RayVsAABB(ray, box);
-    if (ray_aabb.color_index != 0)
+    RaycastResult hit_voxel = RayVsVoxel(ray);
+    if (hit_voxel.color_index != 0)
     {
-        ray.origin = ray_aabb.p;
-        RaycastResult ray_voxel = Linecast(ray, 1000.0);
-        if (ray_voxel.color_index != 0)
+        color.a = 1;
+        const vec4 hit_color    = GetColorFromIndex(hit_voxel.color_index);
+        //get color from ray from sun
+        Ray sun_ray;
+        sun_ray.origin = sun_position;
+        sun_ray.direction = normalize(hit_voxel.p - sun_position);
+        RaycastResult sun_hit_voxel = RayVsVoxel(sun_ray);
+        vec3 difference = abs(hit_voxel.p - sun_hit_voxel.p);
+        if (difference.x <= 0.001 &&
+            difference.y <= 0.001 &&
+            difference.z <= 0.001)
         {
-            vec4 voxel_color = texelFetch(voxel_color_palette, int(ray_voxel.color_index), 0);
-            color.xyz = voxel_color.xyz;
-            color.a = 1.0;
-
-            vec3 max_aabb_corner_from_ray;
-            if (abs(u_camera_position.x - box.min.x) > abs(u_camera_position.x - box.max.x))
-            {
-                max_aabb_corner_from_ray.x = box.min.x;
-            }
-            else
-            {
-                max_aabb_corner_from_ray.x = box.max.x;
-            }
-            if (abs(u_camera_position.y - box.min.y) > abs(u_camera_position.y - box.max.y))
-            {
-                max_aabb_corner_from_ray.y = box.min.y;
-            }
-            else
-            {
-                max_aabb_corner_from_ray.y = box.max.y;
-            }
-            if (abs(u_camera_position.z - box.min.z) > abs(u_camera_position.z - box.max.z))
-            {
-                max_aabb_corner_from_ray.z = box.min.z;
-            }
-            else
-            {
-                max_aabb_corner_from_ray.z = box.max.z;
-            }
-            float max_voxel_distance = distance(u_camera_position, max_aabb_corner_from_ray);
-
-            gl_FragDepth = ray_voxel.distance_mag / max_voxel_distance;
+            color.rgb = hit_color.rgb * sun_color;
         }
         else
         {
-            discard;
+            color.rgb = hit_color.rgb * ambient_color;
         }
     }
     else
-    {
         discard;
+
+#elif RAY_METHOD == RAY_LIGHTS
+
+#define RAY_BOUNCES 1
+
+struct PointColor {
+    vec3 color;
+    vec3 point;
+    bool hit;
+};
+
+    const vec3 sun_position = vec3(0, 50, 50);
+    const vec3 sun_color    = vec3(1);
+    const vec3 ambient_color= vec3(0.1);
+
+    const RaycastResult first_hit = RayVsVoxel(ray);
+    if (first_hit.color_index == 0)
+        discard;
+
+    Ray previous_ray = ray;
+    RaycastResult previous_raycast = first_hit;
+    PointColor points_hit[RAY_BOUNCES];
+    for (int i = 0; i < RAY_BOUNCES; i++)
+    {
+        Ray new_ray;
+        new_ray.origin = previous_raycast.p;
+        new_ray.direction = normalize(ReflectRay(previous_ray.direction, previous_raycast.normal));
+        RaycastResult ray_result = RayVsVoxel(new_ray);
+        if (ray_result.color_index != 0)
+        {
+            PointColor a;
+            a.color = GetColorFromIndex(ray_result.color_index).rgb;
+            a.point = ray_result.p;
+            a.hit   = true;
+            points_hit[i] = a;
+            previous_ray = new_ray;
+            previous_raycast = ray_result;
+        }
+        else
+        {
+            for (i; i < RAY_BOUNCES; i++)
+            {
+                PointColor a;
+                a.color = vec3(0);
+                a.point = vec3(0);
+                a.hit   = false;
+                points_hit[i];
+            }
+        }
     }
+
+    vec3 final_bounce_color = vec3(0);
+    vec3 previous_p         = first_hit.p;
+    for (int i = 0; i < RAY_BOUNCES; i++)
+    {
+        if (!points_hit[i].hit)
+            break;
+        final_bounce_color += (1 / distance(previous_p, points_hit[i].point)) * points_hit[i].color * sun_color;
+        previous_p = points_hit[i].point;
+    }
+
+    color.a = 1;
+    const vec4 hit_color = GetColorFromIndex(first_hit.color_index);
+    Ray sun_ray;
+    sun_ray.origin = sun_position;
+    sun_ray.direction = normalize(first_hit.p - sun_position);
+    RaycastResult sun_hit_voxel = RayVsVoxel(sun_ray);
+    vec3 difference = abs(first_hit.p - sun_hit_voxel.p);
+    if (difference.x <= 0.001 &&
+            difference.y <= 0.001 &&
+            difference.z <= 0.001)
+    {
+        color.rgb = hit_color.rgb * sun_color;
+    }
+    else
+    {
+        color.rgb = hit_color.rgb * ambient_color;
+    }
+
+    if (points_hit[0].hit)
+    {
+        color.rgb = color.rgb;// + final_bounce_color;
+    }
+
+#elif RAY_METHOD == RAY_LIGHT_DIR_DOT
+
+#define ENABLE_SHADOWS 1
+
+    const vec3 sun_position = vec3(0, 50, 50);
+    const vec3 sun_color    = vec3(1, 1, 1);
+    const vec3 ambient_color= vec3(0.1);
+    const float roughness   = 0.5;
+
+    RaycastResult hit_voxel = RayVsVoxel(ray);
+    if (hit_voxel.color_index != 0)
+    {
+        color.a = 1;
+        const vec4 hit_color    = GetColorFromIndex(hit_voxel.color_index);
+        //get color from ray from sun
+        Ray sun_ray;
+        sun_ray.origin = sun_position;
+        sun_ray.direction = normalize(hit_voxel.p - sun_position);
+        RaycastResult sun_hit_voxel = RayVsVoxel(sun_ray);
+        vec3 difference = abs(hit_voxel.p - sun_hit_voxel.p);
+
+#if ENABLE_SHADOWS
+        if (difference.x <= 0.001 &&
+            difference.y <= 0.001 &&
+            difference.z <= 0.001)
+        {
 #endif
+            vec3 random_vec3;
+            random_vec3.x = StackOverflow_Random(vec2(hit_voxel.p.x + hit_voxel.p.y, hit_voxel.p.x + hit_voxel.p.z));
+            random_vec3.y = StackOverflow_Random(vec2(hit_voxel.p.y + hit_voxel.p.z, hit_voxel.p.y + hit_voxel.p.x));
+            random_vec3.z = StackOverflow_Random(vec2(hit_voxel.p.z + hit_voxel.p.x, hit_voxel.p.z + hit_voxel.p.y));
+            random_vec3 = clamp(random_vec3, vec3(-0.5), vec3(0.5));
+
+            vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
+            float light_amount = dot(dir_to_sun, normalize((hit_voxel.normal + (roughness * random_vec3))));
+            light_amount = max(light_amount, 0);
+            color.rgb = hit_color.rgb * sun_color * light_amount;
+#if ENABLE_SHADOWS
+        }
+        else
+        {
+            color.rgb = hit_color.rgb * ambient_color;
+        }
+#endif
+    }
+    else
+        discard;
+
+#endif
+
+
+
+
 
 
 #if 0 //Getting texel fetch to work with the indices

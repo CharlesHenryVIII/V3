@@ -238,29 +238,6 @@ RaycastResult RayVsAABB(const Ray ray, const AABB box)
     return r;
 }
 
-vec3 ReflectRay(const vec3 dir, const vec3 normal)
-{
-    vec3 result;
-#if 0
-    result = -(2 * (dot(normal, dir) * normal - dir));
-#else
-    result = dir;
-    if (normal.x != 0)
-    {
-        result.x = -dir.x;
-    }
-    else if (normal.y != 0)
-    {
-        result.y = -dir.y;
-    }
-    else
-    {
-        result.z = -dir.z;
-    }
-#endif
-    return result;
-}
-
 RaycastResult RayVsVoxel(const Ray ray)
 {
     AABB box = AABB(vec3(0), vec3(u_voxel_size.x, u_voxel_size.y, u_voxel_size.z ));
@@ -363,7 +340,7 @@ void main()
         voxel_rays[i] = RayVsVoxel(ray);
         if (voxel_rays[i].color_index != 0) 
         {
-            ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
+            ray.direction = reflect(ray.direction, voxel_rays[i].normal);
             ray.origin = voxel_rays[i].p + ray.direction * 0.001;
             //ray.origin = voxel_rays[i].p;
         }
@@ -475,7 +452,7 @@ struct PointColor {
     {
         Ray new_ray;
         new_ray.origin = previous_raycast.p;
-        new_ray.direction = normalize(ReflectRay(previous_ray.direction, previous_raycast.normal));
+        new_ray.direction = normalize(reflect(previous_ray.direction, previous_raycast.normal));
         RaycastResult ray_result = RayVsVoxel(new_ray);
         if (ray_result.color_index != 0)
         {
@@ -535,14 +512,14 @@ struct PointColor {
 
 #elif RAY_METHOD == RAY_LIGHT_DIR_DOT
 
-#define ENABLE_SHADOWS 0
+#define ENABLE_SHADOWS 1
 #define RAY_BOUNCES 2
 
     const vec3 background_color = vec3(0.263, 0.706, 0.965);
     const vec3 sun_position = vec3(0, 50, 50);
     const vec3 sun_color    = vec3(1, 1, 1);
     const vec3 ambient_color= vec3(0.1);
-    const float roughness   = 1.0;
+    const float roughness   = 0.5;
 
 
     bool hit = false;
@@ -579,6 +556,8 @@ struct PointColor {
 
         vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
         vec3 shifted_normal = normalize(hit_voxel.normal + (roughness * random_vec3));
+        //color.rgb = (shifted_normal + 1) / 2;
+        //break;
         float light_amount = dot(dir_to_sun, shifted_normal);
         light_amount = max(light_amount, 0);
 
@@ -594,7 +573,8 @@ struct PointColor {
         color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
         bounce_color_strength = bounce_color_strength * 0.3;
 
-        ray.direction   = normalize(ReflectRay(ray.direction, shifted_normal));
+        ray.direction = reflect(ray.direction, shifted_normal);
+
         ray.origin      = hit_voxel.p + ray.direction * 0.00001;
 
         //color.rgb = ray.origin / 40;

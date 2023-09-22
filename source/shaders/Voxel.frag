@@ -535,50 +535,73 @@ struct PointColor {
 
 #elif RAY_METHOD == RAY_LIGHT_DIR_DOT
 
-#define ENABLE_SHADOWS 1
+#define ENABLE_SHADOWS 0
+#define RAY_BOUNCES 2
 
+    const vec3 background_color = vec3(0.263, 0.706, 0.965);
     const vec3 sun_position = vec3(0, 50, 50);
     const vec3 sun_color    = vec3(1, 1, 1);
     const vec3 ambient_color= vec3(0.1);
-    const float roughness   = 0.5;
+    const float roughness   = 1.0;
 
-    RaycastResult hit_voxel = RayVsVoxel(ray);
-    if (hit_voxel.color_index != 0)
+
+    bool hit = false;
+    Ray sun_ray;
+    sun_ray.origin = sun_position;
+    color = vec4(0);
+    color.a = 1;
+    float bounce_color_strength = 1;
+
+    for (int i = 0; i < RAY_BOUNCES; i++)
     {
-        color.a = 1;
-        const vec4 hit_color    = GetColorFromIndex(hit_voxel.color_index);
+        RaycastResult hit_voxel = RayVsVoxel(ray);
+        const vec4 hit_color = GetColorFromIndex(hit_voxel.color_index);
+        if (hit_voxel.color_index == 0)
+        {
+            color.rgb += background_color * bounce_color_strength;
+            break;
+        }
+        else if(i != 0 && hit_voxel.p.x < 1)
+        {
+            break;
+        }
+        hit = true;
         //get color from ray from sun
-        Ray sun_ray;
-        sun_ray.origin = sun_position;
         sun_ray.direction = normalize(hit_voxel.p - sun_position);
         RaycastResult sun_hit_voxel = RayVsVoxel(sun_ray);
         vec3 difference = abs(hit_voxel.p - sun_hit_voxel.p);
 
-#if ENABLE_SHADOWS
-        if (difference.x <= 0.001 &&
-            difference.y <= 0.001 &&
-            difference.z <= 0.001)
-        {
-#endif
-            vec3 random_vec3;
-            random_vec3.x = StackOverflow_Random(vec2(hit_voxel.p.x + hit_voxel.p.y, hit_voxel.p.x + hit_voxel.p.z));
-            random_vec3.y = StackOverflow_Random(vec2(hit_voxel.p.y + hit_voxel.p.z, hit_voxel.p.y + hit_voxel.p.x));
-            random_vec3.z = StackOverflow_Random(vec2(hit_voxel.p.z + hit_voxel.p.x, hit_voxel.p.z + hit_voxel.p.y));
-            random_vec3 = clamp(random_vec3, vec3(-0.5), vec3(0.5));
+        vec3 random_vec3;
+        random_vec3.x = StackOverflow_Random(vec2(hit_voxel.p.x + hit_voxel.p.y, hit_voxel.p.x + hit_voxel.p.z));
+        random_vec3.y = StackOverflow_Random(vec2(hit_voxel.p.y + hit_voxel.p.z, hit_voxel.p.y + hit_voxel.p.x));
+        random_vec3.z = StackOverflow_Random(vec2(hit_voxel.p.z + hit_voxel.p.x, hit_voxel.p.z + hit_voxel.p.y));
+        random_vec3 = clamp(random_vec3, vec3(-0.5), vec3(0.5));
 
-            vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
-            float light_amount = dot(dir_to_sun, normalize((hit_voxel.normal + (roughness * random_vec3))));
-            light_amount = max(light_amount, 0);
-            color.rgb = hit_color.rgb * sun_color * light_amount;
+        vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
+        vec3 shifted_normal = normalize(hit_voxel.normal + (roughness * random_vec3));
+        float light_amount = dot(dir_to_sun, shifted_normal);
+        light_amount = max(light_amount, 0);
+
 #if ENABLE_SHADOWS
-        }
-        else
+        if (difference.x > 0.001 &&
+            difference.y > 0.001 &&
+            difference.z > 0.001)
         {
-            color.rgb = hit_color.rgb * ambient_color;
+            light_amount = 0.1;
         }
 #endif
+
+        color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
+        bounce_color_strength = bounce_color_strength * 0.3;
+
+        ray.direction   = normalize(ReflectRay(ray.direction, shifted_normal));
+        ray.origin      = hit_voxel.p + ray.direction * 0.00001;
+
+        //color.rgb = ray.origin / 40;
+        //break;
+
     }
-    else
+    if (!hit)
         discard;
 
 #endif

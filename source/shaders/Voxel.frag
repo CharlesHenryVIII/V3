@@ -519,7 +519,7 @@ struct PointColor {
     const vec3 sun_position = vec3(0, 50, 50);
     const vec3 sun_color    = vec3(1, 1, 1);
     const vec3 ambient_color= vec3(0.1);
-    const float roughness   = 0.5;
+    const float roughness   = 1.0;
 
 
     bool hit = false;
@@ -552,7 +552,7 @@ struct PointColor {
         random_vec3.x = StackOverflow_Random(vec2(hit_voxel.p.x + hit_voxel.p.y, hit_voxel.p.x + hit_voxel.p.z));
         random_vec3.y = StackOverflow_Random(vec2(hit_voxel.p.y + hit_voxel.p.z, hit_voxel.p.y + hit_voxel.p.x));
         random_vec3.z = StackOverflow_Random(vec2(hit_voxel.p.z + hit_voxel.p.x, hit_voxel.p.z + hit_voxel.p.y));
-        random_vec3 = clamp(random_vec3, vec3(-0.5), vec3(0.5));
+        random_vec3 = clamp(random_vec3, vec3(-1.0), vec3(1.0));
 
         vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
         vec3 shifted_normal = normalize(hit_voxel.normal + (roughness * random_vec3));

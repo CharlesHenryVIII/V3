@@ -10,6 +10,7 @@ struct Texture {
         Plain,
         Voxel_Indices,
         Color_Palette,
+        Random,
         Count,
     };
     ENUMOPS(T);

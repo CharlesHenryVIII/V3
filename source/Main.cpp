@@ -7,6 +7,7 @@
 #else
 #include <SDL_opengl.h>
 #endif
+
 #include "imgui.h"
 #include "ImGui/backends/imgui_impl_sdl2.h"
 #include "ImGui/backends/imgui_impl_opengl3.h"
@@ -594,6 +595,7 @@ int main(int argc, char* argv[])
                 static_assert(GL_TEXTURE2 == GL_TEXTURE0 + 2);
                 g_renderer.textures[Texture::Voxel_Indices]->Bind(GL_TEXTURE0);
                 g_renderer.textures[Texture::Color_Palette]->Bind(GL_TEXTURE1);
+                g_renderer.textures[Texture::Random]->Bind(GL_TEXTURE2);
                 g_renderer.shaders[+Shader::Voxel]->UseShader();
 #if 1
                 g_renderer.voxel_rast_ib->Bind();
@@ -621,6 +623,8 @@ int main(int argc, char* argv[])
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt2("u_screen_size",          g_renderer.size);
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt3("u_voxel_size",           voxels.size);
                 g_renderer.shaders[+Shader::Voxel]->UpdateUniformVec3("u_camera_position",      camera_pos_world);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformFloat("u_total_time",          float(totalTime));
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt2("u_random_texture_size",  g_renderer.textures[Texture::T::Random]->m_size.xy);
 
                 glDrawElements(GL_TRIANGLES, 6 * 6, GL_UNSIGNED_INT, 0);
                 //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

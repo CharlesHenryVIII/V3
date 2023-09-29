@@ -3,6 +3,8 @@
 layout (binding = 0) uniform usampler3D voxel_indices;
 //Color Palette for index list
 layout (binding = 1) uniform sampler1D  voxel_color_palette;
+//Random colors
+layout (binding = 2) uniform sampler2D  random_texture;
 
 out vec4 color;
 
@@ -11,10 +13,14 @@ uniform mat4    u_world_from_view;
 uniform ivec2   u_screen_size;
 uniform ivec3   u_voxel_size;
 uniform vec3    u_camera_position;
+uniform float   u_total_time;
+uniform ivec2   u_random_texture_size;
 
 const float FLT_INF     = 1.0 / 0.0;
 const float FLT_MIN     = 1.175494351e-38;
 const float FLT_EPSILON = 1.192092896e-07;
+const float pi = 3.14159;
+const float tau = 2 * pi;
 //const float FLT_EPSILON = 0.01;
 
 ivec3 MagicaToTexelFetch(ivec3 a)
@@ -274,12 +280,85 @@ float StackOverflow_Random(vec2 co)
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+vec3 Random_Texture(int depth, int sample_index)
+{
+    u_random_texture_size.xy;
+    int i = int(float(depth) * 3 + float(sample_index) * 2 + /*(u_total_time * 10) + */float(gl_FragCoord.y * u_screen_size.x + gl_FragCoord.x));
+    ivec2 p;
+    p.y = (i / u_random_texture_size.x) % u_random_texture_size.y;
+    p.x = (i % u_random_texture_size.x);
+    vec4 color = texelFetch(random_texture, p, 0);
+    return color.rgb;
+}
+
+struct PathTracingResult {
+    vec3 emittance;
+    vec3 inner;
+    Ray next_ray;
+    bool valid;
+};
+
+PathTracingResult PathTracing(Ray ray, int depth, int max_depth, int sample_index)
+{
+    const float reflectance = 0.4;
+    PathTracingResult result;
+    result.valid = false;
+    if (depth >= max_depth) {
+        return result;  // Bounced enough times.
+    }
+
+    RaycastResult ray_result = RayVsVoxel(ray);
+    if (ray_result.color_index == 0)
+    {
+        return result;  // Nothing was hit.
+    }
+
+    //Material material = ray.thingHit->material;
+    vec3 emittance = GetColorFromIndex(ray_result.color_index).rgb;
+
+    // Pick a random direction from here and keep going.
+    Ray new_ray;
+    new_ray.origin = ray_result.p;
+
+    // This is NOT a cosine-weighted distribution!
+    vec3 random_vec3 = normalize(Random_Texture(depth, sample_index));
+    if (dot(random_vec3, ray_result.normal) < 0)
+    {
+        random_vec3 = normalize(-random_vec3);
+    }
+
+    new_ray.direction = random_vec3;
+
+    // Probability of the newRay
+    const float p = 1 / (tau);
+
+    // Compute the BRDF for this ray (assuming Lambertian reflection)
+    float cos_theta = dot(new_ray.direction, ray_result.normal);
+    vec3 BRDF = vec3(reflectance / pi);
+
+#if 0
+//CANNOT DO RECURSION
+    // Recursively trace reflected light sources.
+    vec3 incoming = PathTracing(new_ray, depth + 1, max_depth);
+
+    // Apply the Rendering Equation here.
+    return emittance + (BRDF * incoming * cos_theta / p);
+#endif
+
+    result.valid = true;
+    result.emittance = emittance;
+    result.inner = (BRDF * cos_theta / p);
+    result.next_ray = new_ray;
+    return result;
+}
+
 #define RAY_BASIC 0
 #define RAY_BOUNCE 1
 #define RAY_LIGHT 2
 #define RAY_LIGHTS 3
 #define RAY_LIGHT_DIR_DOT 4
-#define RAY_METHOD RAY_LIGHT_DIR_DOT
+#define RAY_PATH_TRACING 5
+#define RAY_METHOD RAY_PATH_TRACING
 
 void main()
 {
@@ -512,8 +591,8 @@ struct PointColor {
 
 #elif RAY_METHOD == RAY_LIGHT_DIR_DOT
 
-#define ENABLE_SHADOWS 1
-#define RAY_BOUNCES 2
+#define ENABLE_SHADOWS 0
+#define RAY_BOUNCES 3
 
     const vec3 background_color = vec3(0.263, 0.706, 0.965);
     const vec3 sun_position = vec3(0, 50, 50);
@@ -556,8 +635,6 @@ struct PointColor {
 
         vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
         vec3 shifted_normal = normalize(hit_voxel.normal + (roughness * random_vec3));
-        //color.rgb = (shifted_normal + 1) / 2;
-        //break;
         float light_amount = dot(dir_to_sun, shifted_normal);
         light_amount = max(light_amount, 0);
 
@@ -571,7 +648,7 @@ struct PointColor {
 #endif
 
         color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
-        bounce_color_strength = bounce_color_strength * 0.3;
+        bounce_color_strength = bounce_color_strength * 0.5;
 
         ray.direction = reflect(ray.direction, shifted_normal);
 
@@ -583,6 +660,47 @@ struct PointColor {
     }
     if (!hit)
         discard;
+
+#elif RAY_METHOD == RAY_PATH_TRACING
+
+    const int samples   = 8;
+    const int max_depth = 3;
+
+    vec4 _color = vec4(0, 0, 0, 1);
+    PathTracingResult results[max_depth];
+    for (int i = 0; i < samples; i++)
+    {
+        for (int j = 0; j < max_depth; j++)
+        {
+            if (j == 0)
+            {
+                results[j] = PathTracing(ray, 0, max_depth, i);
+                if (!results[j].valid)
+                    discard;
+            }
+            else
+            {
+                results[j] = PathTracing(results[j - 1].next_ray, 0, max_depth, i);
+                if (!results[j].valid)
+                    break;
+            }
+        }
+
+        vec3 temp_color = vec3(0);
+        for (int j = max_depth - 1; j >= 0; j--)
+        {
+            temp_color = results[j].emittance + (results[j].inner * temp_color);
+        }
+        _color.rgb += temp_color;
+    }
+    _color.rgb /= samples;  // Average samples.
+    color = _color;
+
+
+    //PathTracingResult r;
+    //r.emittance = emittance;
+    //r.inner = (BRDF * cos_theta / p);
+    //r.next_ray = new_ray;
 
 #endif
 

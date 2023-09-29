@@ -595,7 +595,7 @@ struct PointColor {
 
 #define ENABLE_SHADOWS 1
 #define RAY_BOUNCES 3
-#define RAY_SAMPLES 2
+#define RAY_SAMPLES 1
 
     const vec3 background_color = vec3(0.263, 0.706, 0.965);
     const vec3 sun_position = vec3(0, 50, 50);

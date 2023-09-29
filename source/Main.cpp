@@ -219,6 +219,19 @@ int main(int argc, char* argv[])
             .data       = voxels.color_palette,
         };
 
+        //Texture::TextureParams voxel_colors_parameters = {
+        //    .size = { VOXEL_PALETTE_MAX, 0, 0 },
+        //    .minFilter  = GL_NEAREST,       //GL_LINEAR,
+        //    .magFilter  = GL_NEAREST,       //GL_LINEAR,
+        //    .wrapS      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
+        //    .wrapT      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
+        //    .internalFormat = GL_RGBA,
+        //    .format     = GL_RGBA,
+        //    .type       = GL_UNSIGNED_BYTE,
+        //    .samples    = 1,
+        //    .data       = voxels.color_palette,
+        //};
+
         g_renderer.textures[Texture::Voxel_Indices] = new Texture(voxel_indices_parameters);
         g_renderer.textures[Texture::Color_Palette] = new Texture(voxel_colors_parameters);
     }

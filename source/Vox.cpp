@@ -98,8 +98,10 @@ struct MaterialProperties
     float ior;      // ????
     float att;      // ????
     float flux;     //Radiant flux:             Range from 1 to 5
+    float emit;
     float ri;       //Refractive index:         Range from 1.00 to 3.00
     float d;        // ????
+    float metal;    //metalness
     std::string plastic; //is this in use?
 };
 
@@ -369,8 +371,10 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
             GetValueFromDict(m.ior,     d, "_ior"       );
             GetValueFromDict(m.att,     d, "_att"       );
             GetValueFromDict(m.flux,    d, "_flux"      );
+            GetValueFromDict(m.emit,    d, "_emit"      );
             GetValueFromDict(m.ri,      d, "_ri"        );
             GetValueFromDict(m.d,       d, "_d"         );
+            GetValueFromDict(m.metal,   d, "_metal"     );
             vox.materials[material_id] = m;
             static_assert(sizeof(ColorInt::rgba) == sizeof(u32));
 
@@ -435,6 +439,17 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
 
     out.color_indices = vox.color_indices;
     out.size          = vox.size;
+    for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
+    {
+
+        out.materials[i].metalness  = vox.materials[i].metal;
+        out.materials[i].roughness  = vox.materials[i].rough;
+        out.materials[i].spec       = vox.materials[i].spec;
+        out.materials[i].flux       = vox.materials[i].flux;
+        out.materials[i].emit       = vox.materials[i].emit;
+        out.materials[i].ri         = vox.materials[i].ri;
+        out.materials[i].metal      = vox.materials[i].metal;
+    }
     for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
     {
         out.color_palette[i] = vox.color_palette[i];

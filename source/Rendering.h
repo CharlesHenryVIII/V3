@@ -33,21 +33,18 @@ public:
     ~ShaderProgram();
     void CheckForUpdate();
     void UseShader();
-    void UpdateUniformMat4(const char* name, GLsizei count, GLboolean transpose, const GLfloat* value);
-    void UpdateUniformVec4(const char* name, GLsizei count, const GLfloat* value);
-    void UpdateUniformVec3(const char* name, const Vec3& value);
-    void UpdateUniformVec3(const char* name, GLsizei count, const GLfloat* value);
-    void UpdateUniformVec2(const char* name, GLsizei count, const GLfloat* value);
-    void UpdateUniformFloat(const char* name, GLfloat value);
-    void UpdateUniformFloatStream(const char* name, GLsizei count, const GLfloat* value);
-    void UpdateUniformInt2(const char* name, Vec2I values);
-    void UpdateUniformInt2(const char* name, GLint value1, GLint value2);
-    void UpdateUniformInt3(const char* name, Vec3I v);
-    void UpdateUniformUint8(const char* name, GLuint value);
-    void UpdateUniformUintStream(const char* name, GLsizei count, GLuint* values);
-
-    template<typename T>
-    void UpdateUniform(const char* name, T v);
+    void UpdateUniform(const char* name, const Mat4*    value, const i32 count, bool transpose  );
+    void UpdateUniform(const char* name, const Mat4&    value, bool transpose                   );
+    void UpdateUniform(const char* name, const Vec4*    value, const i32 count                  );
+    void UpdateUniform(const char* name, const Vec3&    value                                   );
+    void UpdateUniform(const char* name, const Vec3*    value, const i32 count                  );
+    void UpdateUniform(const char* name, const Vec2*    value, const i32 count                  );
+    void UpdateUniform(const char* name, const float    value                                   );
+    void UpdateUniform(const char* name, const float*   value, const i32 count                  );
+    void UpdateUniform(const char* name, const Vec2I&   value                                   );
+    void UpdateUniform(const char* name, const Vec3I&   value                                   );
+    void UpdateUniform(const char* name, const u32      value                                   );
+    void UpdateUniform(const char* name, const u32*     value, const i32 count                  );
 };
 
 class GpuBuffer
@@ -99,17 +96,13 @@ public:
     void Upload(T* vertices, size_t count)
     {
         UploadData(vertices, sizeof(vertices[0]) * count);
-#ifdef _DEBUGPRINT
-        DebugPrint("Vertex Buffer Upload,size %i\n", count);
-#endif
+        DEBUG_LOG("Vertex Buffer Upload,size %i\n", count);
     }
     template <typename T>
     void Upload(std::vector<T>& vertices)
     {
         UploadData(vertices.data(), (sizeof(vertices[0]) * vertices.size()));
-#ifdef _DEBUGPRINT
-        DebugPrint("Vertex Buffer Upload,size %i\n", count);
-#endif
+        DEBUG_LOG("Vertex Buffer Upload,size %i\n", count);
     }
 };
 
@@ -133,8 +126,6 @@ struct Renderer {
     ShaderProgram*  shaders[+Shader::Count] = {};
     Texture*        textures[Texture::Count] = {};
 
-    //ShaderProgram*  programs[+Shader::Count] = {};
-    //Texture*        textures[Texture::Count] = {};
     enum SwapInterval_ {
         SwapInterval_AdaptiveSync = -1,
         SwapInterval_Immediate = 0,

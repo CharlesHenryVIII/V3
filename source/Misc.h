@@ -43,9 +43,9 @@ do {                                            \
 
 
 #ifdef _DEBUGPRINT
-#define DEBUGLOG(...) DebugPrint(__VA_ARGS__)
+#define DEBUG_LOG(...) DebugPrint(__VA_ARGS__)
 #else
-#define DEBUGLOG(...) ((void)0)
+#define DEBUG_LOG(...) ((void)0)
 #endif
 
 /**********************************************

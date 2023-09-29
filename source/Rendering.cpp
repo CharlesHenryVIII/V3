@@ -416,104 +416,183 @@ void ShaderProgram::CheckForUpdate()
     }
 }
 
-void ShaderProgram::UpdateUniformMat4(const char* name, GLsizei count, GLboolean transpose, const GLfloat* value)
+void ShaderProgram::UpdateUniform(const char* name, const Mat4* value, const i32 count, bool transpose)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
-    glUniformMatrix4fv(loc, count, transpose, value);
-    DEBUGLOG("Shader Uniform Updated %s\n", name);
+    assert(value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniformMatrix4fv(loc, count, transpose, value->e);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformVec4(const char* name, GLsizei count, const GLfloat* value)
+void ShaderProgram::UpdateUniform(const char* name, const Mat4& value, bool transpose)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
-    glUniform4fv(loc, count, value);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniformMatrix4fv(loc, 1, transpose, value.e);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformVec3(const char* name, const Vec3& value)
+void ShaderProgram::UpdateUniform(const char* name, const Vec4* value, const i32 count)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
+    assert(value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniform4fv(loc, count, value->e);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
+}
+void ShaderProgram::UpdateUniform(const char* name, const Vec3& value)
+{
+    const GLint loc = glGetUniformLocation(m_handle, name);
     glUniform3f(loc, value.x, value.y, value.z);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-void ShaderProgram::UpdateUniformVec3(const char* name, GLsizei count, const GLfloat* value)
+void ShaderProgram::UpdateUniform(const char* name, const Vec3* value, const i32 count)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
-    glUniform3fv(loc, count, value);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    assert(value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniform3fv(loc, count, value->e);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformVec2(const char* name, GLsizei count, const GLfloat* value)
+void ShaderProgram::UpdateUniform(const char* name, const Vec2* value, const i32 count)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
-    glUniform2fv(loc, count, value);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    assert(value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniform2fv(loc, count, value->e);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformFloat(const char* name, GLfloat value)
+void ShaderProgram::UpdateUniform(const char* name, const float value)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
+    const GLint loc = glGetUniformLocation(m_handle, name);
     glUniform1f(loc, value);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformFloatStream(const char* name, GLsizei count, const GLfloat* value)
+void ShaderProgram::UpdateUniform(const char* name, const float* value, const i32 count)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
+    assert(value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
     glUniform1fv(loc, count, value);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformInt2(const char* name, Vec2I values) { UpdateUniformInt2(name, GLint(values.x), GLint(values.y)); }
-void ShaderProgram::UpdateUniformInt2(const char* name, GLint value1, GLint value2)
+void ShaderProgram::UpdateUniform(const char* name, const Vec2I& value)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
-    //glUniform1f(loc, value);
-    glUniform2i(loc, value1, value2);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniform2i(loc, value.x, value.y);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformInt3(const char* name, Vec3I v)
+void ShaderProgram::UpdateUniform(const char* name, const Vec3I& v)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
-    //glUniform1f(loc, value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
     glUniform3i(loc, v.x, v.y, v.z);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
-
-void ShaderProgram::UpdateUniformUint8(const char* name, GLuint value)
+void ShaderProgram::UpdateUniform(const char* name, const u32 value)
 {
-    GLint loc = glGetUniformLocation(m_handle, name);
+    const GLint loc = glGetUniformLocation(m_handle, name);
     glUniform1ui(loc, value);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
+}
+void ShaderProgram::UpdateUniform(const char* name, const u32* value, const i32 count)
+{
+    assert(value);
+    const GLint loc = glGetUniformLocation(m_handle, name);
+    glUniform1uiv(loc, count, value);
+    DEBUG_LOG("Shader Uniform Updated %s\n", name);
 }
 
-void ShaderProgram::UpdateUniformUintStream(const char* name, GLsizei count, GLuint* values)
-{
-    GLint loc = glGetUniformLocation(m_handle, name);
-    glUniform1uiv(loc, count, values);
-#ifdef _DEBUGPRINT
-    DebugPrint("Shader Uniform Updated %s\n", name);
-#endif
-}
+//void ShaderProgram::UpdateUniformMat4(const char* name, GLsizei count, GLboolean transpose, const GLfloat* value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniformMatrix4fv(loc, count, transpose, value);
+//    DEBUG_LOG("Shader Uniform Updated %s\n", name);
+//}
+//
+//void ShaderProgram::UpdateUniformVec4(const char* name, GLsizei count, const GLfloat* value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform4fv(loc, count, value);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformVec3(const char* name, const Vec3& value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform3f(loc, value.x, value.y, value.z);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//void ShaderProgram::UpdateUniformVec3(const char* name, GLsizei count, const GLfloat* value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform3fv(loc, count, value);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformVec2(const char* name, GLsizei count, const GLfloat* value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform2fv(loc, count, value);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformFloat(const char* name, GLfloat value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform1f(loc, value);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformFloatStream(const char* name, GLsizei count, const GLfloat* value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform1fv(loc, count, value);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformInt2(const char* name, Vec2I values) { UpdateUniformInt2(name, GLint(values.x), GLint(values.y)); }
+//void ShaderProgram::UpdateUniformInt2(const char* name, GLint value1, GLint value2)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform1f(loc, value);
+//    glUniform2i(loc, value1, value2);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformInt3(const char* name, Vec3I v)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform1f(loc, value);
+//    glUniform3i(loc, v.x, v.y, v.z);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformUint8(const char* name, GLuint value)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform1ui(loc, value);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
+//
+//void ShaderProgram::UpdateUniformUintStream(const char* name, GLsizei count, GLuint* values)
+//{
+//    GLint loc = glGetUniformLocation(m_handle, name);
+//    glUniform1uiv(loc, count, values);
+//#ifdef _DEBUGPRINT
+//    DebugPrint("Shader Uniform Updated %s\n", name);
+//#endif
+//}
 
 void GpuBuffer::UploadData(void* data, size_t size)
 {

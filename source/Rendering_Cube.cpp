@@ -50,8 +50,8 @@ void RenderCubesInternal(const Mat4& projection, const Mat4& view, std::vector<V
     {
         ZoneScopedN("Upload Cubes");
         vBuffer.Upload(cubesToDraw);
-        sp->UpdateUniformMat4("u_projection_from_view", 1, false, projection.e);
-        sp->UpdateUniformMat4("u_view_from_world",      1, false, view.e);
+        sp->UpdateUniform("u_projection_from_view", projection, false);
+        sp->UpdateUniform("u_view_from_world",      view,       false);
     }
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_Cube), (void*)offsetof(Vertex_Cube, p));

@@ -629,15 +629,15 @@ int main(int argc, char* argv[])
                 glEnableVertexArrayAttrib(g_renderer.vao, 0);
                 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
 
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_projection_from_view", 1, false, projection_from_view.e);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_world",      1, false, view_from_world.e);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_world_from_view",      1, false, world_from_view.e);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformMat4("u_view_from_projection", 1, false, view_from_projection.e);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt2("u_screen_size",          g_renderer.size);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt3("u_voxel_size",           voxels.size);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformVec3("u_camera_position",      camera_pos_world);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformFloat("u_total_time",          float(totalTime));
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniformInt2("u_random_texture_size",  g_renderer.textures[Texture::T::Random]->m_size.xy);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_projection_from_view", projection_from_view, false);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_view_from_world",      view_from_world, false);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_world_from_view",      world_from_view, false);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_view_from_projection", view_from_projection, false);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_screen_size",          g_renderer.size);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_voxel_size",           voxels.size);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_camera_position",      camera_pos_world);
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_total_time",           float(totalTime));
+                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_random_texture_size",  g_renderer.textures[Texture::T::Random]->m_size.xy);
 
                 glDrawElements(GL_TRIANGLES, 6 * 6, GL_UNSIGNED_INT, 0);
                 //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

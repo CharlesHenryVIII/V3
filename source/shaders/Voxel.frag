@@ -358,7 +358,7 @@ PathTracingResult PathTracing(Ray ray, int depth, int max_depth, int sample_inde
 #define RAY_LIGHTS 3
 #define RAY_LIGHT_DIR_DOT 4
 #define RAY_PATH_TRACING 5
-#define RAY_METHOD RAY_PATH_TRACING
+#define RAY_METHOD RAY_LIGHT_DIR_DOT
 
 void main()
 {
@@ -589,81 +589,100 @@ struct PointColor {
         color.rgb = color.rgb;// + final_bounce_color;
     }
 
+
+
 #elif RAY_METHOD == RAY_LIGHT_DIR_DOT
 
-#define ENABLE_SHADOWS 0
+#define ENABLE_SHADOWS 1
 #define RAY_BOUNCES 3
+#define RAY_SAMPLES 2
 
     const vec3 background_color = vec3(0.263, 0.706, 0.965);
     const vec3 sun_position = vec3(0, 50, 50);
     const vec3 sun_color    = vec3(1, 1, 1);
     const vec3 ambient_color= vec3(0.1);
-    const float roughness   = 1.0;
+    const float roughness   = 0.1;
 
-
-    bool hit = false;
     Ray sun_ray;
     sun_ray.origin = sun_position;
     color = vec4(0);
     color.a = 1;
+    vec4 bounce_color = color;
+    vec4 sample_color = color;
     float bounce_color_strength = 1;
-
-    for (int i = 0; i < RAY_BOUNCES; i++)
+    Ray next_ray = ray;
+    for (int i = 0; i < RAY_SAMPLES; i++)
     {
-        RaycastResult hit_voxel = RayVsVoxel(ray);
-        const vec4 hit_color = GetColorFromIndex(hit_voxel.color_index);
-        if (hit_voxel.color_index == 0)
+        for (int j = 0; j < RAY_BOUNCES; j++)
         {
-            color.rgb += background_color * bounce_color_strength;
-            break;
-        }
-        else if(i != 0 && hit_voxel.p.x < 1)
-        {
-            break;
-        }
-        hit = true;
-        //get color from ray from sun
-        sun_ray.direction = normalize(hit_voxel.p - sun_position);
-        RaycastResult sun_hit_voxel = RayVsVoxel(sun_ray);
-        vec3 difference = abs(hit_voxel.p - sun_hit_voxel.p);
+            RaycastResult hit_voxel = RayVsVoxel(next_ray);
+            const vec4 hit_color = GetColorFromIndex(hit_voxel.color_index);
+            if (hit_voxel.color_index == 0)
+            {
+                if (j == 0)
+                {
+                    discard;
+                }
+                else
+                {
+                    bounce_color.rgb += background_color * bounce_color_strength;
+                    break;
+                }
+            }
+            else if(j != 0 && hit_voxel.p.x < 1)
+            {
+                break;
+            }
+            //get color from ray from sun
+            sun_ray.direction = normalize(hit_voxel.p - sun_position);
+            RaycastResult sun_hit_voxel = RayVsVoxel(sun_ray);
+            vec3 difference = abs(hit_voxel.p - sun_hit_voxel.p);
+            vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
 
-        vec3 random_vec3;
-        random_vec3.x = StackOverflow_Random(vec2(hit_voxel.p.x + hit_voxel.p.y, hit_voxel.p.x + hit_voxel.p.z));
-        random_vec3.y = StackOverflow_Random(vec2(hit_voxel.p.y + hit_voxel.p.z, hit_voxel.p.y + hit_voxel.p.x));
-        random_vec3.z = StackOverflow_Random(vec2(hit_voxel.p.z + hit_voxel.p.x, hit_voxel.p.z + hit_voxel.p.y));
-        random_vec3 = clamp(random_vec3, vec3(-1.0), vec3(1.0));
-
-        vec3 dir_to_sun = normalize(sun_position - hit_voxel.p);
-        vec3 shifted_normal = normalize(hit_voxel.normal + (roughness * random_vec3));
-        float light_amount = dot(dir_to_sun, shifted_normal);
-        light_amount = max(light_amount, 0);
-
-#if ENABLE_SHADOWS
-        if (difference.x > 0.001 &&
-            difference.y > 0.001 &&
-            difference.z > 0.001)
-        {
-            light_amount = 0.1;
-        }
+#if 1
+            vec3 random_vec3 = normalize(Random_Texture(j, i) * 2 - 1);
+            if (dot(random_vec3, hit_voxel.normal) < 0)
+            {
+                random_vec3 = -random_vec3;
+            }
+#else
+            vec3 random_vec3;
+            random_vec3.x = StackOverflow_Random(vec2(hit_voxel.p.x + hit_voxel.p.y, hit_voxel.p.x + hit_voxel.p.z));
+            random_vec3.y = StackOverflow_Random(vec2(hit_voxel.p.y + hit_voxel.p.z, hit_voxel.p.y + hit_voxel.p.x));
+            random_vec3.z = StackOverflow_Random(vec2(hit_voxel.p.z + hit_voxel.p.x, hit_voxel.p.z + hit_voxel.p.y));
+            random_vec3 = clamp(random_vec3, vec3(-1.0), vec3(1.0));
 #endif
 
-        color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
-        bounce_color_strength = bounce_color_strength * 0.5;
+            vec3 shifted_normal = normalize(hit_voxel.normal + (roughness * random_vec3));
+            float light_amount = dot(dir_to_sun, shifted_normal);
+            light_amount = max(light_amount, 0);
 
-        ray.direction = reflect(ray.direction, shifted_normal);
+#if ENABLE_SHADOWS
+            if (difference.x > 0.001 &&
+                    difference.y > 0.001 &&
+                    difference.z > 0.001)
+            {
+                light_amount = 0.1;
+            }
+#endif
 
-        ray.origin      = hit_voxel.p + ray.direction * 0.00001;
+            bounce_color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
+            bounce_color_strength = bounce_color_strength * 0.5;
 
-        //color.rgb = ray.origin / 40;
-        //break;
+            next_ray.direction = reflect(next_ray.direction, shifted_normal);
 
+            next_ray.origin      = hit_voxel.p + next_ray.direction * 0.00001;
+        }
+        sample_color.rgb += bounce_color.rgb;
+        bounce_color.rgb = vec3(0);
+        bounce_color_strength = 1;
+        next_ray = ray;
     }
-    if (!hit)
-        discard;
+    color.rgb = sample_color.rgb / RAY_SAMPLES;
 
 #elif RAY_METHOD == RAY_PATH_TRACING
 
-    const int samples   = 8;
+    const int samples   = 4;
     const int max_depth = 3;
 
     vec4 _color = vec4(0, 0, 0, 1);

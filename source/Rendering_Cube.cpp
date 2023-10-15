@@ -3,15 +3,12 @@
 #include "Vox.h"
 #include "Rendering.h"
 
-#include "Tracy.hpp"
+//#include "Tracy.hpp"
+#if 0
 
 ///
 /// Add Cubes To Render
 ///
-struct Vertex_Cube {
-    Vec3 p;
-    Color color;
-};
 std::vector<Vertex_Cube> s_cubesToDraw_transparent;
 std::vector<Vertex_Cube> s_cubesToDraw_opaque;
 
@@ -77,3 +74,4 @@ void RenderOpaqueCubes(const Mat4& projection, const Mat4& view)
     ZoneScopedN("Upload and Render Opaque Cubes");
     RenderCubesInternal(projection, view, s_cubesToDraw_opaque);
 }
+#endif

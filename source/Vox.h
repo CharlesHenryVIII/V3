@@ -1,6 +1,7 @@
 #pragma once
 #include "Math.h"
 #include "Misc.h"
+#include "GpuSharedData.h"
 
 #include <string>
 #include <vector>
@@ -40,22 +41,23 @@ struct Vertex_Voxel {
     //u8 _unused_1;
     //u8 _unused_2;
 };
-struct VoxMaterial {
-    float metalness;
-    float roughness;    //Surface Roughness:        Range from 0 to 100
-    float spec;         //Specular reflectivity:    Range from 0 to 100
-    //float ior;      // ????
-    //float att;      // ????
-    float flux;     //Radiant flux:             Range from 1 to 5
-    float emit;
-    float ri;       //Refractive index:         Range from 1.00 to 3.00
-    //float d;        // ????
-    float metal;    //metalness
-    //std::string plastic; //is this in use?
-};
+//struct VoxMaterial {
+//    float metalness;
+//    float roughness;    //Surface Roughness:        Range from 0 to 100
+//    float spec;         //Specular reflectivity:    Range from 0 to 100
+//    //float ior;      // ????
+//    //float att;      // ????
+//    float flux;     //Radiant flux:             Range from 1 to 5
+//    float emit;
+//    float ri;       //Refractive index:         Range from 1.00 to 3.00
+//    //float d;        // ????
+//    float metal;    //metalness
+//    //std::string plastic; //is this in use?
+//    U32Pack color;
+//};
 struct VoxData {
-    VoxMaterial                 materials[VOXEL_PALETTE_MAX];
-    U32Pack                     color_palette[VOXEL_PALETTE_MAX];
+    VoxMaterial                 materials[VOXEL_PALETTE_MAX] = {};
+    //U32Pack                     color_palette[VOXEL_PALETTE_MAX];
     std::vector<VoxelBlockData> color_indices;
     Vec3I                       size;
 };

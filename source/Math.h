@@ -90,6 +90,9 @@ typedef gbQuat<double>  Quatd;
 typedef gbVec2<i32>     Vec2I;
 typedef gbVec3<i32>     Vec3I;
 typedef gbVec4<i32>     Vec4I;
+typedef gbVec2<u32>     Vec2U;
+typedef gbVec3<u32>     Vec3U;
+typedef gbVec4<u32>     Vec4U;
 typedef gbMat2<i32>     Mat2I;
 typedef gbMat3<i32>     Mat3I;
 typedef gbMat4<i32>     Mat4I;
@@ -113,23 +116,10 @@ struct Vertex {
     Vec2 uv;
     Vec3 n;
 };
-
-//union Vec2I {
-//    struct { i32 x, y; };
-//    i32 e[2];
-//};
-//
-//union Vec3I {
-//    struct { i32 x, y, z; };
-//
-//    Vec2I xy;
-//    i32 e[3];
-//};
-//
-//union Vec2d {
-//    struct { double x, y; };
-//    double e[2];
-//};
+struct Vertex_Cube {
+    Vec3 p;
+    Color color;
+};
 
 struct RectInt {
     Vec2I botLeft = {};

@@ -435,8 +435,6 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
         }
     }
 
-    i32 testResult = 123;
-
     out.color_indices = vox.color_indices;
     out.size          = vox.size;
     for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
@@ -449,11 +447,12 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
         out.materials[i].emit       = vox.materials[i].emit;
         out.materials[i].ri         = vox.materials[i].ri;
         out.materials[i].metal      = vox.materials[i].metal;
+        out.materials[i].color      = vox.color_palette[i];
     }
-    for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
-    {
-        out.color_palette[i] = vox.color_palette[i];
-    }
+    //for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
+    //{
+    //    out.color_palette[i] = vox.color_palette[i];
+    //}
 
     if (v.i == v.max)
         return true;
@@ -839,7 +838,7 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
                             {
                                 Vertex_Voxel v;
                                 v.p = ToVec3(this_voxel_pos) + cubeVertices[face_i].e[i];
-                                v.rgba = voxel_data.color_palette[this_voxel_i];
+                                v.rgba = voxel_data.materials[this_voxel_i].color;
                                 v.n = face_i;
 
                                 Vec3I ap = *(&vertex_blocks_to_check[face_i].e0 + ((i * 2) + 0));

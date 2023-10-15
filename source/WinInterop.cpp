@@ -33,6 +33,45 @@ std::string ToString(const char* fmt, ...)
     return buffer;
 }
 
+void ScanDirectoryForFileNames(const std::string& dir, std::vector<std::string>& out)
+{
+    out.clear();
+
+    std::string d = dir;
+    if (dir.size() < 2)
+    {
+        d = "*";
+    }
+    else
+    {
+
+        if (d[d.size() - 1] != '*')
+        {
+            if (d[d.size() - 1] != '/')
+            {
+                d += '/';
+            }
+            d += '*';
+        }
+    }
+	
+
+    WIN32_FIND_DATAA find_data;
+    HANDLE handle = FindFirstFileA(d.c_str(), &find_data);
+    while (true)
+	{
+		if (!(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+		{
+            out.push_back(find_data.cFileName);
+		}
+        if (FindNextFileA(handle, &find_data) == 0)
+        {
+            //if (GetLastError() == ERROR_NO_MORE_FILES)
+            break;
+        }
+	}
+}
+
 //
 // https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-a-thread-name-in-native-code?view=vs-2017
 // Usage: SetThreadName ((DWORD)-1, "MainThread");

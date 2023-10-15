@@ -756,6 +756,20 @@ template<typename T> GB_MATH_DEF gbMat4<T> gb_mat4_perspective(const T fovy, con
     return r;
 }
 
+template <typename T>
+gbMat4<T> gb_mat4_perspective_directx_rh(T fovy, T aspect, T z_near, T z_far)
+{
+    T tan_half_fovy = gb_tan(0.5f * fovy);
+    gbMat4<T> out = {};
+    float yscale = 1.0f / tan_half_fovy;
+    out.col[0].e[0] = yscale / aspect;
+    out.col[1].e[1] = yscale;
+    out.col[2].e[2] = z_far / (z_near - z_far);
+    out.col[2].e[3] = -1.0f;
+    out.col[3].e[2] = z_near * z_far / (z_near - z_far);
+    return out;
+}
+
 template<typename T> GB_MATH_DEF gbMat4<T> gb_mat4_infinite_perspective(const T fovy, const T aspect, const T z_near) {
     T range  = gb_tan(0.5f * fovy) * z_near;
     T left   = -range * aspect;

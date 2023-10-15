@@ -16,7 +16,8 @@ project "V3"
     links {
         "SDL2",
         "SDL2main",
-        "OpenGL32",
+        --"OpenGL32",
+        "d3d11.lib",
     }
 
     libdirs {
@@ -30,7 +31,7 @@ project "V3"
         "contrib/ImGui",
         "contrib/SDL2/include",
         "contrib/tracy-master/public/tracy",
-        "contrib/GLEW/include",
+        --"contrib/GLEW/include",
         --"contrib/GLEW/include/GL",
     }
     flags {
@@ -40,17 +41,18 @@ project "V3"
     }
     defines {
         "_CRT_SECURE_NO_WARNINGS",
-        "GLEW_STATIC",
+        --"GLEW_STATIC",
         --"CAMERA", --DO WE NEED THIS?
     }
     files {
         "Source/**",
-        "contrib/GLEW/src/glew.c",
+        --"contrib/GLEW/src/glew.c",
         "contrib/tracy-master/public/TracyClient.cpp",
         "contrib/ImGui/*.cpp",
         "contrib/ImGui/*.h",
-        "contrib/ImGui/backends/imgui_impl_opengl3.*",
+        --"contrib/ImGui/backends/imgui_impl_opengl3.*",
         "contrib/ImGui/backends/imgui_impl_sdl2.*",
+        "contrib/ImGui/backends/imgui_impl_dx11.*",
         --"contrib/ImGui/backends/imgui_impl_opengl3.h",
         --"contrib/ImGui/backends/imgui_impl_opengl3.cpp",
         --"contrib/ImGui/backends/imgui_impl_sdl.h",
@@ -60,21 +62,25 @@ project "V3"
 
     postbuildcommands
     {
-        "{COPY} contrib/SDL2/lib/%{cfg.platform}/SDL2.dll %{cfg.targetdir}"
+        "{COPY} contrib/SDL2/lib/%{cfg.platform}/SDL2.dll %{cfg.targetdir}",
+        "{COPY} contrib/d3dcompiler_47.dll %{cfg.targetdir}",
     }
 
 
     filter "configurations:Debug"
-        defines { "_DEBUG" , "TRACY_ENABLE"}
+        defines { "_DEBUG" , "TRACY_ENABLE", "NOMINMAX"}
         symbols  "On"
         optimize "Off"
 
     filter "configurations:Profile"
-        defines { "NDEBUG" , "TRACY_ENABLE"}
+        defines { "NDEBUG" , "TRACY_ENABLE", "NOMINMAX"}
         symbols  "off"
         optimize "On"
 
     filter "configurations:Release"
-        defines { "NDEBUG" }
+        defines { "NDEBUG", "NOMINMAX" }
         symbols  "off"
         optimize "On"
+
+    filter("files:**.hlsl")
+        flags("ExcludeFromBuild")

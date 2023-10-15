@@ -1,16 +1,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define GB_MATH_IMPLEMENTATION
-#include "GL/glew.h"
 #include <SDL.h>
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <SDL_opengles2.h>
-#else
-#include <SDL_opengl.h>
-#endif
 
 #include "imgui.h"
 #include "ImGui/backends/imgui_impl_sdl2.h"
-#include "ImGui/backends/imgui_impl_opengl3.h"
+#include "ImGui/backends/imgui_impl_dx11.h"
 #include "Tracy.hpp"
 #include "stb/stb_image.h"
 
@@ -56,42 +50,10 @@ static void HelpMarker(const char* desc)
     }
 }
 
-void InitializeImGui()
-{
-    //___________
-    //IMGUI SETUP
-    //___________
-
-    // GL 3.0 + GLSL 130
-    const char* glsl_version = "#version 460";
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplSDL2_InitForOpenGL(g_renderer.SDL_Context, g_renderer.GL_Context);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    SDL_ShowCursor(SDL_ENABLE);
-}
-
 int main(int argc, char* argv[])
 {
     //Initilizers
     InitializeVideo();
-    InitializeImGui();
 
     double freq = double(SDL_GetPerformanceFrequency()); //HZ
     double startTime = SDL_GetPerformanceCounter() / freq;
@@ -107,68 +69,6 @@ int main(int argc, char* argv[])
     bool g_cursorEngaged = true;
     CommandHandler playerInput;
 
-    float p = 0.5f;
-    Vertex vertices[] = {
-      // |   Position    |      UV       |         Normal        |
-        { {  p,  p,  p }, { 0.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } }, // +x
-        { {  p, -p,  p }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
-        { {  p,  p, -p }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
-        { {  p, -p, -p }, { 1.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
-
-        { { -p,  p, -p }, { 0.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } }, // -x
-        { { -p, -p, -p }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
-        { { -p,  p,  p }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
-        { { -p, -p,  p }, { 1.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
-            
-        { {  p,  p,  p }, { 0.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } }, // +y
-        { {  p,  p, -p }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
-        { { -p,  p,  p }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
-        { { -p,  p, -p }, { 1.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
-            
-        { { -p, -p,  p }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y 
-        { { -p, -p, -p }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
-        { {  p, -p,  p }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
-        { {  p, -p, -p }, { 1.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
-            
-        { { -p,  p,  p }, { 0.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } }, // +z
-        { { -p, -p,  p }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
-        { {  p,  p,  p }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
-        { {  p, -p,  p }, { 1.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
-            
-        { {  p,  p, -p }, { 0.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } }, // -z
-        { {  p, -p, -p }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
-        { { -p,  p, -p }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
-        { { -p, -p, -p }, { 1.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
-    };
-
-    static_assert(arrsize(vertices) == 24, "");
-
-
-    GLuint vertex_buffer;
-    glGenBuffers(1, &vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    int indices3D[36] = {};
-    for (int face = 0; face < 6; ++face)
-    {
-        int base_index = face * 4;
-        indices3D[face * 6 + 0] = base_index + 0;
-        indices3D[face * 6 + 1] = base_index + 1;
-        indices3D[face * 6 + 2] = base_index + 2;
-        indices3D[face * 6 + 3] = base_index + 1;
-        indices3D[face * 6 + 4] = base_index + 3;
-        indices3D[face * 6 + 5] = base_index + 2;
-        assert(base_index + 3 < arrsize(vertices));
-    }
-
-    GLuint index_buffer;
-    glGenBuffers(1, &index_buffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices3D), indices3D, GL_STATIC_DRAW);
-
-    g_renderer.shaders[+Shader::Main]->UseShader();
-
     float   camera_dis              = 2.0f;
     float   camera_yaw              = 0.0f;
     float   camera_pitch            = pi / 4;
@@ -180,60 +80,27 @@ int main(int argc, char* argv[])
     VoxData voxels;
     LoadVoxFile(voxels, "assets/Test_01.vox");
     //LoadVoxFile(voxels, "assets/castle.vox");
+#if RASTERIZED_RENDERING == 1
     std::vector<Vertex_Voxel> voxel_vertices;
     u32 vox_mesh_index_count = CreateMeshFromVox(voxel_vertices, voxels);
-    g_renderer.voxel_rast_vb->Upload(voxel_vertices.data(), voxel_vertices.size());
+    if (voxel_vertices.size())
+        g_renderer.voxel_rast_vb->Upload(voxel_vertices.data(), voxel_vertices.size(), sizeof(voxel_vertices[0]));
     assert(vox_mesh_index_count);
+#endif
 
-    Vec3 voxel_box_vertices[arrsize(vertices)] = {};
-    for (i32 i = 0; i < arrsize(vertices); i++)
     {
-        voxel_box_vertices[i] = vertices[i].p + p;
-        voxel_box_vertices[i] = HadamardProduct(voxel_box_vertices[i], ToVec3(voxels.size));
-    }
-    g_renderer.voxel_box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices));
-    {
+
         Texture::TextureParams voxel_indices_parameters = {
             .size = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
-            .minFilter  = GL_NEAREST,       //GL_LINEAR,
-            .magFilter  = GL_NEAREST,       //GL_LINEAR,
-            .wrapS      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
-            .wrapT      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
-            .internalFormat = GL_R8UI,
-            .format     = GL_RED_INTEGER,
-            .type       = GL_UNSIGNED_BYTE,
-            .samples    = 1,
-            .data       = voxels.color_indices[0].e,
+            .format = Texture::Format_R8_UINT,
+            .mode   = Texture::Address_Clamp,
+            .filter = Texture::Filter_Point,
+            .bytes_per_pixel = sizeof(voxels.color_indices[0].e[0][0][0]),
+            .data = voxels.color_indices[0].e,
         };
-
-        Texture::TextureParams voxel_colors_parameters = {
-            .size = { VOXEL_PALETTE_MAX, 0, 0 },
-            .minFilter  = GL_NEAREST,       //GL_LINEAR,
-            .magFilter  = GL_NEAREST,       //GL_LINEAR,
-            .wrapS      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
-            .wrapT      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
-            .internalFormat = GL_RGBA,
-            .format     = GL_RGBA,
-            .type       = GL_UNSIGNED_BYTE,
-            .samples    = 1,
-            .data       = voxels.color_palette,
-        };
-
-        //Texture::TextureParams voxel_colors_parameters = {
-        //    .size = { VOXEL_PALETTE_MAX, 0, 0 },
-        //    .minFilter  = GL_NEAREST,       //GL_LINEAR,
-        //    .magFilter  = GL_NEAREST,       //GL_LINEAR,
-        //    .wrapS      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
-        //    .wrapT      = GL_CLAMP_TO_EDGE, //GL_REPEAT,
-        //    .internalFormat = GL_RGBA,
-        //    .format     = GL_RGBA,
-        //    .type       = GL_UNSIGNED_BYTE,
-        //    .samples    = 1,
-        //    .data       = voxels.color_palette,
-        //};
-
-        g_renderer.textures[Texture::Voxel_Indices] = new Texture(voxel_indices_parameters);
-        g_renderer.textures[Texture::Color_Palette] = new Texture(voxel_colors_parameters);
+        CreateTexture(&g_renderer.textures[Texture::Type_Voxel_Indices], voxel_indices_parameters);
+        CreateGpuBuffer(&g_renderer.structure_voxel_materials,"voxel_materials", false, GpuBuffer::Type::Structure);
+        g_renderer.structure_voxel_materials->Upload(voxels.materials, VOXEL_PALETTE_MAX, sizeof(voxels.materials[0]));
     }
 
     while (g_running)
@@ -346,7 +213,6 @@ int main(int argc, char* argv[])
                         {
                             g_renderer.size.x = SDLEvent.window.data1;
                             g_renderer.size.y = SDLEvent.window.data2;
-                            glViewport(0, 0, g_renderer.size.x, g_renderer.size.y);
                             break;
                         }
                         case SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -437,7 +303,8 @@ int main(int argc, char* argv[])
             camera_look_at_target += camera_velocity * deltaTime;
 
 
-            Mat4 projection_from_view = gb_mat4_perspective(tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 1.0f, 1000.0f);
+            //Mat4 projection_from_view = gb_mat4_perspective(tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 1.0f, 1000.0f);
+            Mat4 projection_from_view = gb_mat4_perspective_directx_rh(tau / 4, float(g_renderer.size.x) / g_renderer.size.y, 1.0f, 1000.0f);
             Vec3 camera_pos_world = camera_position_swivel + camera_look_at_target;
             Mat4 view_from_world        = gb_mat4_look_at(camera_pos_world, camera_look_at_target, { 0,1,0 });
             Mat4 view_from_projection   = gb_mat4_inverse(projection_from_view);
@@ -496,12 +363,10 @@ int main(int argc, char* argv[])
                 voxel_rays[i] = RayVsVoxel(ray, voxels);
                 if (voxel_rays[i].success)
                 {
-#if 0
                     Color c = {};
                     c.e[i] = 1.0f;
                     c.a = 0.5f;
                     AddCubeToRender(voxel_rays[i].p, c, 0.5f);
-#endif
                     ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
                     ray.origin = voxel_rays[i].p + ray.direction * 0.0001f;
                 }
@@ -515,7 +380,7 @@ int main(int argc, char* argv[])
                 if (voxel_rays[i].success)
                 {
                     ColorInt a;
-                    a.rgba = voxels.color_palette[voxel_rays[i].success].rgba;
+                    a.rgba = voxels.materials[voxel_rays[i].success].color.rgba;
                     Color temp = ToColor(a);
                     //c.r *= temp.r / (i + 1);
                     //c.g *= temp.g / (i + 1);
@@ -541,7 +406,7 @@ int main(int argc, char* argv[])
                 float transformInformationWidth = 0.0f;
                 {
                     // Start the Dear ImGui frame
-                    ImGui_ImplOpenGL3_NewFrame();
+                    ImGui_ImplDX11_NewFrame();
                     ImGui_ImplSDL2_NewFrame(g_renderer.SDL_Context);
                     ImGui::NewFrame();
 
@@ -594,61 +459,38 @@ int main(int argc, char* argv[])
 
             RenderUpdate(g_renderer.size, deltaTime);
 
-            glClearDepth(1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 #if RASTERIZED_RENDERING == 0
             //Pathtraced voxel rendering
             {
                 ZoneScopedN("Voxel Render");
-                
-                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                glDisable(GL_CULL_FACE);
-                static_assert(GL_TEXTURE1 == GL_TEXTURE0 + 1);
-                static_assert(GL_TEXTURE2 == GL_TEXTURE0 + 2);
-                g_renderer.textures[Texture::Voxel_Indices]->Bind(GL_TEXTURE0);
-                g_renderer.textures[Texture::Color_Palette]->Bind(GL_TEXTURE1);
-                g_renderer.textures[Texture::Random]->Bind(GL_TEXTURE2);
-                g_renderer.shaders[+Shader::Voxel]->UseShader();
-#if 1
-                g_renderer.voxel_rast_ib->Bind();
-                g_renderer.voxel_box_vb->Bind();
-#else
-                g_renderer.voxel_ib->Bind();
-                g_renderer.voxel_vb->Bind();
-#endif
 
-#if 0
-                glDisable(GL_DEPTH_TEST);
-                glDepthMask(GL_FALSE);
-#else
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-#endif
+                CB_Vertex vertex_data = {
+                    .projection_from_view = projection_from_view,
+                    .view_from_world = view_from_world,
+                };
 
-                glEnableVertexArrayAttrib(g_renderer.vao, 0);
-                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), 0);
+                g_renderer.constant_vbuffer->Upload(&vertex_data, 1, sizeof(vertex_data));
 
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_projection_from_view", projection_from_view, false);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_view_from_world",      view_from_world, false);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_world_from_view",      world_from_view, false);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_view_from_projection", view_from_projection, false);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_screen_size",          g_renderer.size);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_voxel_size",           voxels.size);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_camera_position",      camera_pos_world);
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_total_time",           float(totalTime));
-                g_renderer.shaders[+Shader::Voxel]->UpdateUniform("u_random_texture_size",  g_renderer.textures[Texture::T::Random]->m_size.xy);
+                CB_Pixel pixel_data = {
+                    .view_from_projection = view_from_projection,
+                    .world_from_view = world_from_view,
+                    .screen_size = g_renderer.size,
+                    .random_texture_size = g_renderer.textures[Texture::Type_Random]->m_size.xy,
+                    .voxel_size = voxels.size,
+                    .total_time = float(totalTime),
+                    .camera_position = camera_pos_world,
+                    ._pad0 = 0.0f,
+                };
 
-                glDrawElements(GL_TRIANGLES, 6 * 6, GL_UNSIGNED_INT, 0);
-                //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-                glEnable(GL_CULL_FACE);
+                g_renderer.constant_pbuffer->Upload(&pixel_data, 1, sizeof(pixel_data));
+
+                g_renderer.constant_vbuffer->Bind(SLOT_CB_VERTEX, true);
+                g_renderer.constant_pbuffer->Bind(SLOT_CB_PIXEL, false);
+                DrawPathTracedVoxels();
             }
             {
                 Vec3 voxels_size = ToVec3(voxels.size);
                 AddCubeToRender(voxels_size / 2.0f, transRed, voxels_size);
-                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                RenderOpaqueCubes(      projection_from_view, view_from_world);
-                RenderTransparentCubes( projection_from_view, view_from_world);
             }
 #else
 
@@ -692,24 +534,24 @@ int main(int argc, char* argv[])
                 if (showIMGUI)
                 {
                     ImGui::Render();
-                    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+                    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
                 }
             }
         }
         {
             ZoneScopedN("Frame End");
-
-            SDL_GL_SwapWindow(g_renderer.SDL_Context);
+            RenderPresent();
         }
         FrameMark;
     }
     // Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplDX11_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 
-    SDL_GL_DeleteContext(g_renderer.GL_Context);
+    //SDL_GL_DeleteContext(g_renderer.GL_Context);
     SDL_DestroyWindow(g_renderer.SDL_Context);
     SDL_Quit();
     return 0;
+
 }

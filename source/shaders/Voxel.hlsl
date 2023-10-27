@@ -32,6 +32,10 @@ VS_Output Vertex_Main(VS_Input input)
 //**************
 //PIXEL SHADER
 //**************
+struct PS_Output {
+    float4 color : SV_Target;
+    float depth : SV_Depth;
+};
 
 //Voxel index list
 Texture3D<uint1> voxel_indices      TEXTURE_REGISTER(SLOT_VOXEL_INDICES);
@@ -58,6 +62,16 @@ static const float FLT_MIN     = 1.175494351e-38;
 static const float FLT_EPSILON = 1.192092896e-07;
 static const float pi = 3.14159;
 static const float tau = 2 * pi;
+
+// Converts a color from sRGB gamma to linear light gamma
+float4 srgb_to_linear(float4 sRGB)
+{
+    float3 cutoff = step(sRGB.rgb, (float3)0.04045);
+    // abs is here to silence compiler warning
+    float3 higher = pow((abs(sRGB.rgb) + (float3)0.055) / (float3)1.055, (float3)2.4);
+    float3 lower = sRGB.rgb / (float3)12.92;
+    return float4(lerp(higher, lower, cutoff), sRGB.a);
+}
 
 int3 MagicaToTexelFetch(int3 a)
 {
@@ -94,7 +108,12 @@ float4 GetColorFromIndex(uint i)
     vc.b = float((pack & 0x00FF0000) >> 16) / 255;
     vc.g = float((pack & 0x0000FF00) >>  8) / 255;
     vc.r = float((pack & 0x000000FF)      ) / 255;
-    return vc;
+    return srgb_to_linear(vc);
+}
+float GetRoughnessFromIndex(uint rough_i)
+{
+    float roughness = materials[rough_i].roughness;
+    return roughness;
 }
 
 void PixelToRay(out float3 ray_origin, out float3 ray_direction, float2 pixel)
@@ -459,18 +478,14 @@ void PathTracing(   out float3    emittance,
 #define RAY_PATH_TRACING 5
 #define RAY_METHOD RAY_LIGHT_DIR_DOT
 
-float4 Pixel_Main(VS_Output input) : SV_Target
+PS_Output Pixel_Main(VS_Output input)
 {
-    float4 color = 0;
+    PS_Output output;
+    output.color = 0;
+    output.depth = 0;
     float3 ray_origin;
     float3 ray_direction;
     PixelToRay(ray_origin, ray_direction, input.position.xy);
-    //color.r = input.position.x / 1280;
-    //color.r = input.position.y / 720;
-    //color.rg = input.position.xy / float2(1280, 720);
-    //return color;
-    //return float4(ray_direction.xyz, 1);
-    //return float4(input.position.xy, 0, 1);
 
 #if RAY_METHOD == RAY_BASIC
 //use basic single ray hit
@@ -704,60 +719,57 @@ struct PointColor {
 #define RAY_BOUNCES 3
 #define RAY_SAMPLES 4
 
-    const float3 background_color   = float3(0.263, 0.706, 0.965);
+    const float3 background_color   = srgb_to_linear(float4(0.263, 0.706, 0.965, 1)).rgb;
     const float3 sun_position       = float3(0, 50, 50);
-    const float3 sun_color          = float3(1, 1, 1);
+    const float3 sun_color          = srgb_to_linear(float4(0.8, 0.8, 0.8, 1)).rgb;
     const float3 ambient_color      = 0.1;
     const float  roughness          = 0.1;
 
     float3 sun_ray_origin;
     float3 sun_ray_direction;
     sun_ray_origin = sun_position;
-    color = 0;
-    color.a = 1;
-    float4 bounce_color = color;
-    float4 sample_color = color;
+    output.color = 0;
+    output.color.a = 1;
+    float4 bounce_color = output.color;
+    float4 sample_color = output.color;
     float bounce_color_strength = 1;
     float3 next_ray_origin = ray_origin;
     float3 next_ray_direction = ray_direction;
+
+    uint    start_hit_voxel_color_index;
+    float3  start_hit_voxel_p;
+    float   start_hit_voxel_distance_mag;
+    float3  start_hit_voxel_normal;
+    RayVsVoxel(start_hit_voxel_color_index,
+            start_hit_voxel_p,
+            start_hit_voxel_distance_mag,
+            start_hit_voxel_normal,
+            next_ray_origin,
+            next_ray_direction);
+
+    if(start_hit_voxel_color_index == 0)
+    {
+        discard;
+    }
+    else
+    {
+        float4 projected_p = mul(projection_from_view, mul(view_from_world, float4(start_hit_voxel_p, 1)));
+        output.depth = projected_p.z / projected_p.w;
+    }
+
+
     for (int i = 0; i < RAY_SAMPLES; i++)
     {
+        uint    hit_voxel_color_index = start_hit_voxel_color_index;
+        float3  hit_voxel_p = start_hit_voxel_p;
+        float   hit_voxel_distance_mag = start_hit_voxel_distance_mag;
+        float3  hit_voxel_normal = start_hit_voxel_normal;
+
         for (int j = 0; j < RAY_BOUNCES; j++)
         {
-            uint    hit_voxel_color_index;
-            float3  hit_voxel_p;
-            float   hit_voxel_distance_mag;
-            float3  hit_voxel_normal;
-            RayVsVoxel(hit_voxel_color_index,
-                hit_voxel_p,
-                hit_voxel_distance_mag,
-                hit_voxel_normal,
-                next_ray_origin,
-                next_ray_direction);
-            //color.rgb = float3(float(hit_voxel_color_index) / 255, 0, 0);
-            //color.rgb = float3(float(GetIndexFromGameVoxelPosition(int3(0, 0, 2))) / 255, 0, 0);
-            //color.r = float(hit_voxel_color_index) / 1;
-            //return color;
-
-            //color.r = float(hit_voxel_color_index) / 255;
-            //return color;
-            const float4 hit_color = GetColorFromIndex(hit_voxel_color_index);
-            //color.r = hit_color.a;
-            //return color;
             if (hit_voxel_color_index == 0)
             {
-                if (j == 0)
-                {
-                    discard;
-                }
-                else
-                {
-                    bounce_color.rgb += background_color * bounce_color_strength;
-                    break;
-                }
-            }
-            else if(j != 0 && hit_voxel_p.x < 1)
-            {
+                bounce_color.rgb += background_color * (bounce_color_strength * 0.5);
                 break;
             }
             //get color from ray from sun
@@ -777,10 +789,7 @@ struct PointColor {
             float3 dir_to_sun = normalize(sun_position - hit_voxel_p);
 
 #if 1
-            //float3 random_float3 = normalize(Random_Texture(j, i, input.position.xy) * 2 - 1);
             float3 random_float3 = Random_Texture(j, i, input.position.xy);
-            //color.rgb = random_float3;
-            //return color;
             if (dot(random_float3, hit_voxel_normal) < 0)
             {
                 random_float3 = -random_float3;
@@ -795,7 +804,16 @@ struct PointColor {
 
 
 //TODO: shifted_normal is biased and needs to be improved
+#if 1
+            float mat_rough = materials[hit_voxel_color_index].roughness;
+            //float mat_rough = materials[2].metalness;
+            //float mat_rough = float(hit_voxel_color_index) / 3;
+            //output.color.rgb = float3(mat_rough, mat_rough, mat_rough);
+            //return output;
+            float3 shifted_normal = normalize(hit_voxel_normal + (mat_rough * random_float3));
+#else
             float3 shifted_normal = normalize(hit_voxel_normal + (roughness * random_float3));
+#endif
             float light_amount = dot(dir_to_sun, shifted_normal);
             light_amount = max(light_amount, 0);
 
@@ -808,12 +826,18 @@ struct PointColor {
             }
 #endif
 
+            const float4 hit_color = GetColorFromIndex(hit_voxel_color_index);
             bounce_color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
             bounce_color_strength = bounce_color_strength * 0.5;
 
             next_ray_direction = reflect(next_ray_direction, shifted_normal);
-
             next_ray_origin      = hit_voxel_p + next_ray_direction * 0.00001;
+            RayVsVoxel(hit_voxel_color_index,
+                    hit_voxel_p,
+                    hit_voxel_distance_mag,
+                    hit_voxel_normal,
+                    next_ray_origin,
+                    next_ray_direction);
         }
         sample_color.rgb += bounce_color.rgb;
         bounce_color.rgb = 0;
@@ -821,8 +845,8 @@ struct PointColor {
         next_ray_origin = ray_origin;
         next_ray_direction = ray_direction;
     }
-    color.rgb = sample_color.rgb / RAY_SAMPLES;
-    return color;
+    output.color.rgb = sample_color.rgb / RAY_SAMPLES;
+    return output;
 
 #elif RAY_METHOD == RAY_PATH_TRACING
 
@@ -895,7 +919,7 @@ struct PointColor {
 
 #endif
 
-    return color;
+    return output;
 
 
 

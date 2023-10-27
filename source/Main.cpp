@@ -15,7 +15,6 @@
 #include "WinInterop_File.h"
 #include "Vox.h"
 #include "Raycast.h"
-#include "Rendering_Cube.h"
 
 #include <unordered_map>
 #include <vector>
@@ -98,7 +97,7 @@ int main(int argc, char* argv[])
             .bytes_per_pixel = sizeof(voxels.color_indices[0].e[0][0][0]),
             .data = voxels.color_indices[0].e,
         };
-        CreateTexture(&g_renderer.textures[Texture::Type_Voxel_Indices], voxel_indices_parameters);
+        CreateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], voxel_indices_parameters);
         CreateGpuBuffer(&g_renderer.structure_voxel_materials,"voxel_materials", false, GpuBuffer::Type::Structure);
         g_renderer.structure_voxel_materials->Upload(voxels.materials, VOXEL_PALETTE_MAX, sizeof(voxels.materials[0]));
     }
@@ -366,7 +365,7 @@ int main(int argc, char* argv[])
                     Color c = {};
                     c.e[i] = 1.0f;
                     c.a = 0.5f;
-                    AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+                    AddCubeToRender(voxel_rays[i].p, c, 0.5f, false);
                     ray.direction = ReflectRay(ray.direction, voxel_rays[i].normal);
                     ray.origin = voxel_rays[i].p + ray.direction * 0.0001f;
                 }
@@ -386,7 +385,7 @@ int main(int argc, char* argv[])
                     //c.g *= temp.g / (i + 1);
                     //c.b *= temp.b / (i + 1);
                     c = c * temp;
-                    AddCubeToRender(voxel_rays[i].p, c, 0.5f);
+                    AddCubeToRender(voxel_rays[i].p, c, 0.5f, false);
                 }
                 else
                 {
@@ -395,6 +394,11 @@ int main(int argc, char* argv[])
                     c.b = 1.0f;
                 }
             }
+            {
+                Vec3 voxel_size = ToVec3(voxels.size);
+                AddCubeToRender(voxel_size / 2.0f, Orange, voxel_size, true);
+            }
+            AddCubeToRender({}, Color(1.0f, 1.0f, 1.0f, 0.999f), 5, false);
 
             RaycastResult voxel_hit_result = voxel_rays[0];
 
@@ -459,38 +463,26 @@ int main(int argc, char* argv[])
 
             RenderUpdate(g_renderer.size, deltaTime);
 
+            CB_Common common = {
+                .projection_from_view = projection_from_view,
+                .view_from_world = view_from_world,
+                .view_from_projection = view_from_projection,
+                .world_from_view = world_from_view,
+                .screen_size = g_renderer.size,
+                .random_texture_size = g_renderer.textures[Texture::Index_Random]->m_size.xy,
+                .voxel_size = voxels.size,
+                .total_time = float(totalTime),
+                .camera_position = camera_pos_world,
+                ._pad0 = 0.0f,
+            };
+            g_renderer.cb_common->Upload(&common, 1, sizeof(common));
+            g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
+
 #if RASTERIZED_RENDERING == 0
             //Pathtraced voxel rendering
             {
                 ZoneScopedN("Voxel Render");
-
-                CB_Vertex vertex_data = {
-                    .projection_from_view = projection_from_view,
-                    .view_from_world = view_from_world,
-                };
-
-                g_renderer.constant_vbuffer->Upload(&vertex_data, 1, sizeof(vertex_data));
-
-                CB_Pixel pixel_data = {
-                    .view_from_projection = view_from_projection,
-                    .world_from_view = world_from_view,
-                    .screen_size = g_renderer.size,
-                    .random_texture_size = g_renderer.textures[Texture::Type_Random]->m_size.xy,
-                    .voxel_size = voxels.size,
-                    .total_time = float(totalTime),
-                    .camera_position = camera_pos_world,
-                    ._pad0 = 0.0f,
-                };
-
-                g_renderer.constant_pbuffer->Upload(&pixel_data, 1, sizeof(pixel_data));
-
-                g_renderer.constant_vbuffer->Bind(SLOT_CB_VERTEX, true);
-                g_renderer.constant_pbuffer->Bind(SLOT_CB_PIXEL, false);
                 DrawPathTracedVoxels();
-            }
-            {
-                Vec3 voxels_size = ToVec3(voxels.size);
-                AddCubeToRender(voxels_size / 2.0f, transRed, voxels_size);
             }
 #else
 
@@ -520,13 +512,19 @@ int main(int argc, char* argv[])
 
                 glDrawElements(GL_TRIANGLES, vox_mesh_index_count, GL_UNSIGNED_INT, 0);
             }
-            {
-                //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                RenderOpaqueCubes(      projection_from_view, view_from_world);
-                RenderTransparentCubes( projection_from_view, view_from_world);
-            }
 #endif
 
+            {
+                Vec3 voxels_size = ToVec3(voxels.size);
+                //AddCubeToRender(voxels_size / 2.0f, transRed, voxels_size);
+            }
+            {
+                ZoneScopedN("Cube Render");
+                g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
+                RenderOpaqueCubes();
+                RenderTransparentCubes();
+                RenderWireframeCubes();
+            }
 
 
             {

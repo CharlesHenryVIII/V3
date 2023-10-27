@@ -4,6 +4,23 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+File::File() :
+    m_handleIsValid     (0),
+    m_textIsValid       (0),
+    m_timeIsValid       (0),
+    m_binaryDataIsValid (0),
+    m_time              (0),
+    m_handle            (0),
+    m_accessType        (0),
+    m_shareType         (0),
+    m_openType          (0)
+{
+    m_filename.clear();
+    m_dataString.clear();
+    m_dataBinary.clear();
+    assert(false);
+}
+
 File::File(char const* filename, File::Mode fileMode, bool createIfNotFound)
 {
     std::string sFileName = std::string(filename);
@@ -100,13 +117,21 @@ void File::GetText()
     static_assert(sizeof(DWORD) == sizeof(u32));
     static_assert(sizeof(LPVOID) == sizeof(void*));
 
-    const u32 fileSize = GetFileSize(m_handle, NULL);
-    m_dataString.resize(fileSize, 0);
-    m_textIsValid = true;
-    if (!ReadFile(m_handle, (LPVOID)m_dataString.c_str(), (DWORD)fileSize, reinterpret_cast<LPDWORD>(&bytesRead), NULL))
+    LARGE_INTEGER file_size;
+    if (!GetFileSizeEx(m_handle, &file_size))
     {
-        //assert(false);
+        DWORD error = GetLastError();
+        assert(false);
+        return;
+    }
+    assert(file_size.HighPart == 0);  //ReadFile Does not support large files
+    m_dataString.resize(file_size.QuadPart, 0);
+    m_textIsValid = true;
+    if (!ReadFile(m_handle, (LPVOID)m_dataString.c_str(), file_size.LowPart, reinterpret_cast<LPDWORD>(&bytesRead), NULL))
+    {
         m_textIsValid = false;
+        DWORD file_error = GetLastError();
+        assert(file_error == ERROR_SUCCESS);
     }
 }
 

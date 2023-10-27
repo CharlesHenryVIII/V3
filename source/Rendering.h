@@ -8,6 +8,138 @@
 
 #include <unordered_map>
 
+
+
+
+
+//************
+//Texture
+//************
+
+struct Texture {
+    enum Index : u32 {
+        Index_Invalid,
+        Index_Minecraft,
+        Index_Plain,
+        Index_Voxel_Indices,
+        Index_Random,
+        Index_BackbufferDepth,
+        Index_Count,
+    }; ENUMOPS(Index);
+    enum Dimension : u32 {
+        Dimension_Invalid,
+        Dimension_1D,
+        Dimension_2D,
+        Dimension_3D,
+        Dimension_Count,
+    }; ENUMOPS(Dimension);
+    enum Filter : u32 {
+        Filter_Invalid,
+        Filter_Point,
+        Filter_Aniso,
+        Filter_Count,
+    }; ENUMOPS(Filter);
+    enum AddressMode : u32 {
+        Address_Invalid,
+        Address_Wrap,
+        Address_Mirror,
+        Address_Clamp,
+        Address_Border,
+        Address_MirrorOnce,
+        Address_Count,
+    }; ENUMOPS(AddressMode);
+    enum Format : u32 {
+        Format_Invalid,
+        Format_D32_FLOAT,
+        Format_D16_UNORM,
+        Format_R8G8B8A8_UNORM,
+        Format_R8G8B8A8_UNORM_SRGB,
+        Format_R8G8B8A8_UINT,
+        Format_R8_UINT,
+        Format_Count,
+    }; ENUMOPS(Format);
+    enum Type : u32 {
+        Type_Invalid,
+        Type_Texture,
+        Type_Depth,
+        Type_Count,
+    }; ENUMOPS(Type);
+
+    struct TextureParams {
+        Vec3I size;
+        Format format = Format_R8G8B8A8_UINT;
+        AddressMode mode = Address_Wrap;
+        Filter filter = Filter_Aniso;
+        Type type = Type_Texture;
+        i32 bytes_per_pixel;
+        const void* data;
+    };
+
+    Vec3I m_size = {};
+    i32 m_bytes_per_pixel = 0;//bytes per pixel
+    Dimension m_dimension;
+    Type m_type;
+};
+
+bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format format, i32 bytes_per_pixel);
+bool CreateTexture(Texture** texture, const char* fileLocation, Texture::Format format, Texture::Filter filter);
+bool CreateTexture(Texture** texture, const Texture::TextureParams& tp);
+void DeleteTexture(Texture** texture);
+
+
+
+
+
+//************
+//Shader
+//************
+
+struct GpuBuffer
+{
+    enum class Type : u32 {
+        Invalid,
+        Vertex,
+        Index,
+        Constant,
+        Structure,
+        Count,
+    };
+    ENUMOPS(Type);
+    enum class BindLocation : u32 {
+        Invalid,
+        Vertex,
+        Pixel,
+        All,
+        Count,
+    };
+    ENUMOPS(BindLocation);
+
+    bool m_is_dymamic = true;
+    Type m_type = GpuBuffer::Type::Invalid;
+    char m_name[32];
+    size_t m_count = 0;
+
+    void Upload(const void* data, const size_t count, const u32 element_size, const bool is_byte_format = false);
+    template<typename T>
+    inline void Upload(const std::vector<T>& a)
+    {
+        assert(a.size());
+        Upload(a.data(), a.size(), sizeof(T), false);
+    }
+    //Bind a Constant or Structure buffer
+    void Bind(u32 slot, GpuBuffer::BindLocation binding);
+};
+bool CreateGpuBuffer(GpuBuffer** buffer, const char* name, bool is_dynamic, GpuBuffer::Type type);
+void DeleteBuffer(GpuBuffer** buffer);
+
+
+
+
+
+//************
+//Shader
+//************
+
 struct ShaderProgram
 {
     enum ShaderType : u32 {
@@ -44,6 +176,8 @@ struct ShaderProgram
     u64 m_vertexLastWriteTime = {};
     u64 m_pixelLastWriteTime = {};
     u32 m_vertex_component_count = 0;
+    std::vector<std::string> m_reference_file_names;
+    std::vector<u64> m_reference_file_times;
 
     bool CompileShader(std::string text, const std::string& file_name, ShaderType shader_type);
 };
@@ -52,101 +186,26 @@ bool CreateShader(ShaderProgram** shader,
     const std::string& pixelFileLocation,
     ShaderProgram::InputElementDesc* input_layout,
     i32 layout_count);
-
-struct GpuBuffer
+inline bool CreateShader(ShaderProgram** s, const std::string& shader_file_location, ShaderProgram::InputElementDesc* input_layout, i32 layout_count)
 {
-    enum class Type : u32 {
-        Invalid,
-        Vertex,
-        Index,
-        Constant,
-        Structure,
-        Count,
-    };
-    ENUMOPS(Type);
+    return CreateShader(s, shader_file_location, shader_file_location, input_layout, layout_count);
+}
 
-    bool m_is_dymamic = true;
-    Type m_type = GpuBuffer::Type::Invalid;
-    char m_name[32];
-    size_t m_count;
 
-    void Upload(const void* data, const size_t count, const u32 element_size, const bool is_byte_format = false);
-    //Bind a Constant or Structure buffer
-    void Bind(u32 slot, bool for_vertex_shader);
-};
-bool CreateGpuBuffer(GpuBuffer** buffer, const char* name, bool is_dynamic, GpuBuffer::Type type);
-void DeleteBuffer(GpuBuffer** buffer);
 
-struct Texture {
-    enum T : u32 {
-        Type_Invalid,
-        Type_Minecraft,
-        Type_Plain,
-        Type_Voxel_Indices,
-        Type_Random,
-        Type_Count,
-    }; ENUMOPS(T);
-    enum Dimension : u32 {
-        Dimension_Invalid,
-        Dimension_1D,
-        Dimension_2D,
-        Dimension_3D,
-        Dimension_Count,
-    }; ENUMOPS(Dimension);
-    enum Filter : u32 {
-        Filter_Invalid,
-        Filter_Point,
-        Filter_Linear,
-        Filter_Count,
-    }; ENUMOPS(Filter);
-    enum AddressMode : u32 {
-        Address_Invalid,
-        Address_Wrap,
-        Address_Mirror,
-        Address_Clamp,
-        Address_Border,
-        Address_MirrorOnce,
-        Address_Count,
-    }; ENUMOPS(AddressMode);
-    enum Format : u32 {
-        Format_Invalid,
-        Format_R8G8B8A8_UNORM,
-        Format_R8G8B8A8_UNORM_SRGB,
-        Format_R8G8B8A8_UINT,
-        Format_R8_UINT,
-        Format_Count,
-    }; ENUMOPS(Format);
 
-    struct TextureParams {
-        Vec3I size;
-        //DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UINT;
-        //D3D11_TEXTURE_ADDRESS_MODE wrap = D3D11_TEXTURE_ADDRESS_WRAP;
-        //D3D11_FILTER filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        Format format = Format_R8G8B8A8_UINT;
-        AddressMode mode = Address_Wrap;
-        Filter filter = Filter_Linear;
-        i32 bytes_per_pixel;
-        const void* data;
-    };
-
-    Vec3I m_size = {};
-    i32 m_bytes_per_pixel = 0;//bytes per pixel
-    Dimension m_dimension;
-};
-
-bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format format, i32 bytes_per_pixel);
-bool CreateTexture(Texture** texture, const char* fileLocation, Texture::Format format);
-bool CreateTexture(Texture** texture, const Texture::TextureParams& tp);
-void DeleteTexture(Texture** texture);
+//************
+//Renderer
+//************
 
 struct Renderer {
     SDL_Window* SDL_Context     = nullptr;
-    GpuBuffer* voxel_rast_ib    = nullptr;
+    GpuBuffer* quad_ib          = nullptr;
     GpuBuffer* voxel_rast_vb    = nullptr;
     GpuBuffer* voxel_vb         = nullptr;
     GpuBuffer* box_vb           = nullptr;//Does not need index buffer
-    GpuBuffer* constant_vbuffer = nullptr;
-    GpuBuffer* constant_pbuffer = nullptr;
+    GpuBuffer* cube_vb          = nullptr;//Uses quad_ib
+    GpuBuffer* cb_common        = nullptr;
     GpuBuffer* structure_voxel_materials= nullptr;
     GpuBuffer* structure_voxel_indices  = nullptr;
     //bool msaaEnabled = true;
@@ -159,7 +218,7 @@ struct Renderer {
     Vec2I pos;
     u32   refresh_rate;
     ShaderProgram*  shaders[+ShaderProgram::Index_Count] = {};
-    Texture*        textures[Texture::Type_Count] = {};
+    Texture*        textures[Texture::Index_Count] = {};
 
     enum SwapInterval_ {
         SwapInterval_AdaptiveSync = -1,
@@ -174,6 +233,11 @@ void InitializeVideo();
 void RenderUpdate(Vec2I windowSize, float deltaTime);
 void RenderPresent();
 void DrawPathTracedVoxels();
+        void AddCubeToRender(Vec3 p, Color color, Vec3  scale, bool wireframe);
+inline  void AddCubeToRender(Vec3 p, Color color, float scale, bool wireframe) { AddCubeToRender(p, color, { scale, scale, scale }, wireframe); }
+void RenderTransparentCubes();
+void RenderOpaqueCubes();
+void RenderWireframeCubes();
 
 
 enum class MessageBoxType {

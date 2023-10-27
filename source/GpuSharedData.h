@@ -2,13 +2,16 @@
 #pragma once
 #endif
 
-#define SLOT_CB_VERTEX 0
-#define SLOT_CB_PIXEL 0
+#define SLOT_CB_COMMON 0
+//Voxel Draw Call
 #define SLOT_VOXEL_INDICES 0
 #define SLOT_VOXEL_INDICES_SAMPLER 0
 #define SLOT_RANDOM_TEXTURE 2
 #define SLOT_RANDOM_TEXTURE_SAMPLER 2
 #define SLOT_VOXEL_MATERIALS 3
+//Cube Draw call
+#define SLOT_CUBE_TEXTURE 0
+#define SLOT_CUBE_TEXTURE_SAMPLER 0
 
 #ifdef __cplusplus
 
@@ -52,14 +55,13 @@
 #define Mat3I int3x3
 #define Mat4I int4x4
 
+
+
 #endif
 
-STRUCT_PREFIX CB_Vertex STRUCT_SUFFIX(SLOT_CB_VERTEX) {
+STRUCT_PREFIX CB_Common STRUCT_SUFFIX(SLOT_CB_COMMON) {
     Mat4 projection_from_view;
     Mat4 view_from_world;
-};
-
-STRUCT_PREFIX CB_Pixel STRUCT_SUFFIX(SLOT_CB_PIXEL) {
     Mat4 view_from_projection;
     Mat4 world_from_view;
     Vec2I screen_size;

@@ -11,15 +11,16 @@ struct File {
         //Append,//Append: Open file for output.
     };
 
-    bool m_handleIsValid     = false;
-    bool m_textIsValid       = false;
-    bool m_timeIsValid       = false;
-    bool m_binaryDataIsValid = false;
-    std::string m_filename;
-    std::string         m_dataString;
-    std::vector<u8>  m_dataBinary;
-    u64 m_time = {};
+    bool    m_handleIsValid     = false;
+    bool    m_textIsValid       = false;
+    bool    m_timeIsValid       = false;
+    bool    m_binaryDataIsValid = false;
+    u64     m_time              = {};
+    std::string     m_filename;
+    std::string     m_dataString;
+    std::vector<u8> m_dataBinary;
 
+    File();
     File(char const* fileName,        File::Mode fileMode, bool createIfNotFound);
     File(const std::string& fileName, File::Mode fileMode, bool createIfNotFound);
     ~File();

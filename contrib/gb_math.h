@@ -756,9 +756,7 @@ template<typename T> GB_MATH_DEF gbMat4<T> gb_mat4_perspective(const T fovy, con
     return r;
 }
 
-template <typename T>
-gbMat4<T> gb_mat4_perspective_directx_rh(T fovy, T aspect, T z_near, T z_far)
-{
+template <typename T> GB_MATH_DEF gbMat4<T> gb_mat4_perspective_directx_rh(T fovy, T aspect, T z_near, T z_far) {
     T tan_half_fovy = gb_tan(0.5f * fovy);
     gbMat4<T> out = {};
     float yscale = 1.0f / tan_half_fovy;

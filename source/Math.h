@@ -102,6 +102,22 @@ MATH_PREFIX Vec4 GetVec4(Vec3 a, float b)
     return { a.x, a.y, a.z, b };
 }
 
+const Vec2 uv_coordinates_indexed[] = {
+    {0, 1},
+    {1, 1},
+    {0, 0},
+    {1, 0},
+};
+const Vec2 uv_coordinates_full[] = {
+    {0, 0},
+    {1, 0},
+    {0, 1},
+
+    {1, 0},
+    {1, 1},
+    {0, 1},
+};
+
 union U32Pack {
     u32 pack;
     u32 rgba;
@@ -116,10 +132,14 @@ struct Vertex {
     Vec2 uv;
     Vec3 n;
 };
+
+#pragma pack(push, 1)
 struct Vertex_Cube {
-    Vec3 p;
     Color color;
+    Vec3 p;
+    Vec2 uv;
 };
+#pragma pack(pop)
 
 struct RectInt {
     Vec2I botLeft = {};
@@ -474,6 +494,11 @@ MATH_PREFIX T Lerp(const T& a, const T& b, float t)
     return a + (b - a) * t;
 }
 
+MATH_PREFIX Vec3 Lerp(const Vec3& a, const Vec3& b, const Vec3& t)
+{
+    return a + (b - a) * t;
+}
+
 MATH_PREFIX Vec3 Converge(const Vec3& value, const Vec3& target, float rate, float dt)
 {
     return Lerp(target, value, exp2(-rate * dt));
@@ -627,6 +652,14 @@ MATH_PREFIX Vec3I ToVec3I(const Vec3& a)
 {
     return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(a.z) };
 }
+MATH_PREFIX Vec3I ToVec3I(const Vec2& a, const float b)
+{
+    return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(b) };
+}
+MATH_PREFIX Vec3I ToVec3I(const Vec2I& a, const int b)
+{
+    return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(b) };
+}
 MATH_PREFIX Vec3  ToVec3(const Vec3I& a)
 {
     return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z) };
@@ -720,7 +753,7 @@ struct VertexFace {
 //    gb_vec3(0.0f, 0.0f, 0.0f),
 //};
 
-const VertexFace cubeVertices[6] = {
+const VertexFace vertex_cube_indexed[6] = {
     // +x
     VertexFace( {
     Vec3(1.0,  1.0,  1.0),
@@ -763,6 +796,62 @@ const VertexFace cubeVertices[6] = {
     Vec3(0.0,  1.0,  0.0 ),
     Vec3(0.0,  0.0,  0.0 )
     })
+};
+
+const Vertex vertices_cube_full[] = {
+    // |   Position    |      UV       |         Normal        |
+      { { +0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } }, // +x
+      { { +0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+      { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
+
+      { { +0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+      { { +0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+      { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
+
+
+      { { -0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } }, // -x
+      { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+      { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
+
+      { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+      { { -0.5f, -0.5f, +0.5f }, { 1.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+      { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
+
+
+      { { +0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } }, // +y
+      { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+      { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
+
+      { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+      { { -0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+      { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
+
+
+      { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y 
+      { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+      { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
+
+      { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+      { { +0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+      { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
+
+
+      { { -0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } }, // +z
+      { { -0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+      { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
+
+      { { -0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+      { { +0.5f, -0.5f, +0.5f }, { 1.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+      { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
+
+
+      { { +0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } }, // -z
+      { { +0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+      { { -0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
+
+      { { +0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+      { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+      { { -0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
 };
 
 const VertexFace smallCubeVertices[6] = {

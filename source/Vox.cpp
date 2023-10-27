@@ -288,7 +288,7 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
             {
                 vc = GetDataAndIncrement<VoxChunk>(v); //color index is off by one
                 VALIDATE_V(vc.colorIndex > 0, false);
-                vox.color_indices[vox.color_indices.size() - 1].e[vc.x][vc.z][vc.y] = (vc.colorIndex - 1);
+                vox.color_indices[vox.color_indices.size() - 1].e[vc.x][vc.z][vc.y] = vc.colorIndex;
             }
 
             break;
@@ -437,7 +437,12 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
 
     out.color_indices = vox.color_indices;
     out.size          = vox.size;
-    for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
+    //NOTE: Annoying but for magicka voxel this has to be done this way
+    //Magicka Voxel's indices are as such:
+    //Indicies: 0-255 where 0 is invalid
+    //Colors:   0-254 since 255 cannot be hit since 0 is used in the indices as invalid however it fills 255 with zeros for the palette
+    //Mats:     1-256 however same thing as above 256 will be zero filled since it can never be hit
+    for (i32 i = 1; i < VOXEL_PALETTE_MAX; i++)
     {
 
         out.materials[i].metalness  = vox.materials[i].metal;
@@ -447,7 +452,7 @@ bool LoadVoxFile_MyImplimentation(VoxData& out, const std::string& filePath)
         out.materials[i].emit       = vox.materials[i].emit;
         out.materials[i].ri         = vox.materials[i].ri;
         out.materials[i].metal      = vox.materials[i].metal;
-        out.materials[i].color      = vox.color_palette[i];
+        out.materials[i].color      = vox.color_palette[i - 1];
     }
     //for (i32 i = 0; i < VOXEL_PALETTE_MAX; i++)
     //{
@@ -837,7 +842,7 @@ u32 CreateMeshFromVox(std::vector<Vertex_Voxel>& vertices, const VoxData& voxel_
                             for (i32 i = 0; i < 4; i++)
                             {
                                 Vertex_Voxel v;
-                                v.p = ToVec3(this_voxel_pos) + cubeVertices[face_i].e[i];
+                                v.p = ToVec3(this_voxel_pos) + vertex_cube_indexed[face_i].e[i];
                                 v.rgba = voxel_data.materials[this_voxel_i].color;
                                 v.n = face_i;
 

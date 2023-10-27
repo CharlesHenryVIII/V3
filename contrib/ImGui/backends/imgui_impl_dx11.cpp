@@ -457,10 +457,17 @@ bool    ImGui_ImplDX11_CreateDeviceObjects()
             };\
             sampler sampler0;\
             Texture2D texture0;\
+            float4 srgb_to_linear(float4 sRGB)\
+            {\
+                float3 cutoff = step(sRGB.rgb, (float3)0.04045);\
+                float3 higher = pow((abs(sRGB.rgb) + (float3)0.055) / (float3)1.055, (float3)2.4);\
+                float3 lower = sRGB.rgb / (float3)12.92;\
+                return float4(lerp(higher, lower, cutoff), sRGB.a);\
+            }\
             \
             float4 main(PS_INPUT input) : SV_Target\
             {\
-            float4 out_col = input.col * texture0.Sample(sampler0, input.uv); \
+            float4 out_col = srgb_to_linear(input.col) * texture0.Sample(sampler0, input.uv); \
             return out_col; \
             }";
 

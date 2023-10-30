@@ -20,34 +20,43 @@
 
 Renderer g_renderer;
 
+struct SwapChain {
+    IDXGISwapChain*             handle              = nullptr;
+    ID3D11RenderTargetView*     render_target_view  = nullptr;
+    ID3D11DepthStencilView*     depth_stencil_view  = nullptr;
+    ID3D11DepthStencilState*    depth_stencil_state = nullptr;
+    ID3D11Texture2D*            depth_texture       = nullptr;
+
+    Vec2I   size;
+    u32     refresh_rate;
+    u32     sample_count;
+    u32     sample_quality;
+};
+
 struct DX11Data {
     ID3D11Device*           device;
     ID3D11DeviceContext*    device_context;
     IDXGIFactory*           factory;
-    IDXGISwapChain*         swap_chain;
+    SwapChain               swap_chain;
     ID3D11BlendState*       blend_state;
     ID3D11RasterizerState*  rasterizer_full;
     ID3D11RasterizerState*  rasterizer_wireframe;
     ID3D11RasterizerState*  rasterizer_voxel;
-    ID3D11RenderTargetView* backbuffer_view;
 
     HRESULT(*D3DCompileFunc)        (LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
     HRESULT(*D3DCompileFromFileFunc)(LPCWSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 };
 static DX11Data s_dx11 = {};
 
-inline void _SafeRelease(IUnknown** obj)
+template <typename T>
+void SafeRelease(T*& unknown)
 {
-    if (obj)
+    if (unknown)
     {
-        if (*obj)
-        {
-            (*obj)->Release();
-            *obj = nullptr;
-        }
+        unknown->Release();
+        unknown = nullptr;
     }
 }
-#define SAFE_RELEASE(name) _SafeRelease((IUnknown**)(&(name)));
 
 extern "C" {
 #ifdef _MSC_VER
@@ -58,6 +67,18 @@ extern "C" {
     __attribute__((dllexport)) int AmdPowerXpressRequestHighPerformance = 0x00000001;
 #endif
 }
+
+#if _DEBUG
+void ReportDX11References()
+{
+    ID3D11Debug* debug_interface;
+    s_dx11.device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug_interface);
+    HRESULT result = debug_interface->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+    assert(SUCCEEDED(result));
+}
+#else
+void ReportDX11References() {};
+#endif
 
 
 
@@ -87,9 +108,9 @@ void DeleteTexture(Texture** texture)
     DX11Texture* tex = reinterpret_cast<DX11Texture*>(texture);
     switch (tex->m_dimension)
     {
-    case Texture::Dimension_1D: SAFE_RELEASE(tex->m_texture1D); break;
-    case Texture::Dimension_2D: SAFE_RELEASE(tex->m_texture2D); break;
-    case Texture::Dimension_3D: SAFE_RELEASE(tex->m_texture3D); break;
+    case Texture::Dimension_1D: SafeRelease(tex->m_texture1D); break;
+    case Texture::Dimension_2D: SafeRelease(tex->m_texture2D); break;
+    case Texture::Dimension_3D: SafeRelease(tex->m_texture3D); break;
     }
     delete* texture;
 }
@@ -402,7 +423,7 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
 {
     DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(this);
     m_count = count;
-    SAFE_RELEASE(buf->m_buffer);
+    SafeRelease(buf->m_buffer);
     assert(data);
     assert(element_size);
     assert(buf->m_type != GpuBuffer::Type::Invalid);
@@ -416,17 +437,17 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
     UINT misc_flags = 0;
     switch (buf->m_type)
     {
-    case GpuBuffer::Type::Vertex:   
+    case GpuBuffer::Type::Vertex:
         buffer_type = D3D11_BIND_VERTEX_BUFFER;
         break;
-    case GpuBuffer::Type::Index:    
+    case GpuBuffer::Type::Index:
         buffer_type = D3D11_BIND_INDEX_BUFFER;
         break;
-    case GpuBuffer::Type::Constant: 
+    case GpuBuffer::Type::Constant:
         buffer_type = D3D11_BIND_CONSTANT_BUFFER;
         cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
         break;
-    case GpuBuffer::Type::Structure: 
+    case GpuBuffer::Type::Structure:
         cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
         misc_flags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         buffer_type = D3D11_BIND_SHADER_RESOURCE;
@@ -579,7 +600,7 @@ void DeleteBuffer(GpuBuffer** buffer)
 {
     VALIDATE(buffer);
     DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(*buffer);
-    SAFE_RELEASE(buf->m_buffer);
+    SafeRelease(buf->m_buffer);
     delete buf;
     DEBUG_LOG("GPU Buffer deleted %i, %i\n", m_target, m_handle);
 }
@@ -636,7 +657,7 @@ struct DX11IncludeManager : ID3DInclude
 };
 
 
-struct DX11Shader : public ShaderProgram 
+struct DX11Shader : public ShaderProgram
 {
     //D3D11_USAGE m_usage = D3D11_USAGE_DYNAMIC;
     ID3D11Buffer* m_buffer = nullptr;
@@ -685,9 +706,9 @@ bool CreateShader(ShaderProgram** s,
 ShaderProgram::~ShaderProgram()
 {
     DX11Shader* shader = reinterpret_cast<DX11Shader*>(this);
-    SAFE_RELEASE(shader->m_vertex_shader);
-    SAFE_RELEASE(shader->m_pixel_shader);
-    SAFE_RELEASE(shader->m_vertex_input_layout);
+    SafeRelease(shader->m_vertex_shader);
+    SafeRelease(shader->m_pixel_shader);
+    SafeRelease(shader->m_vertex_input_layout);
     DEBUG_LOG("Shader Program Deleted\n");
 }
 bool ShaderProgram::CompileShader(std::string text, const std::string& file_name, ShaderType shader_type)
@@ -773,16 +794,16 @@ bool ShaderProgram::CompileShader(std::string text, const std::string& file_name
 
     if (!failed)
     {
-        SAFE_RELEASE(errors);
+        SafeRelease(errors);
         switch (shader_type)
         {
         case Type_Vertex:
-            SAFE_RELEASE(shader->m_vertex_shader);
+            SafeRelease(shader->m_vertex_shader);
             if (FAILED(s_dx11.device->CreateVertexShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &shader->m_vertex_shader)))
             {
                 FAIL;
-                SAFE_RELEASE(code);
-                SAFE_RELEASE(errors);
+                SafeRelease(code);
+                SafeRelease(errors);
                 failed = true;
             }
             else
@@ -799,16 +820,16 @@ bool ShaderProgram::CompileShader(std::string text, const std::string& file_name
                     FAIL;
                     failed = true;
                 }
-                SAFE_RELEASE(code);
+                SafeRelease(code);
             }
             break;
         case Type_Pixel:
-            SAFE_RELEASE(shader->m_pixel_shader);
+            SafeRelease(shader->m_pixel_shader);
             if (FAILED(s_dx11.device->CreatePixelShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &shader->m_pixel_shader)))
             {
                 FAIL;
-                SAFE_RELEASE(code);
-                SAFE_RELEASE(errors);
+                SafeRelease(code);
+                SafeRelease(errors);
                 failed = true;
             }
             break;
@@ -977,7 +998,7 @@ void FillIndexBuffer(GpuBuffer* ib, size_t count)
 
         baseIndex += 4; //Amount of vertices
     }
-    
+
     ib->Upload(arr.data(), amount, sizeof(baseIndex));
 }
 
@@ -1024,11 +1045,116 @@ void InitializeImGui()
     SDL_ShowCursor(SDL_ENABLE);
 }
 
+void UpdateSwapchain()
+{
+    SafeRelease(s_dx11.swap_chain.render_target_view);
+    SafeRelease(s_dx11.swap_chain.depth_stencil_view);
+    SafeRelease(s_dx11.swap_chain.depth_stencil_state);
+    SafeRelease(s_dx11.swap_chain.depth_texture);
+    HRESULT result = s_dx11.swap_chain.handle->ResizeBuffers(
+        0,//2,                          //UINT        BufferCount, IS THIS RIGHT???
+        (UINT)g_renderer.size.x,                     //UINT        Width,
+        (UINT)g_renderer.size.y,                     //UINT        Height,
+        DXGI_FORMAT_UNKNOWN,//DXGI_FORMAT_R8G8B8A8_UNORM, //DXGI_FORMAT NewFormat,
+        0                           //UINT        SwapChainFlags
+    );
+    assert(SUCCEEDED(result));
+
+    DXGI_SWAP_CHAIN_DESC desc;
+    s_dx11.swap_chain.handle->GetDesc(&desc);
+    assert(desc.BufferDesc.Width == g_renderer.size.x);
+    assert(desc.BufferDesc.Height == g_renderer.size.y);
+    s_dx11.swap_chain.size.x = desc.BufferDesc.Width;
+    s_dx11.swap_chain.size.y = desc.BufferDesc.Height;
+    s_dx11.swap_chain.refresh_rate = desc.BufferDesc.RefreshRate.Numerator;
+    s_dx11.swap_chain.sample_count = desc.SampleDesc.Count;
+    s_dx11.swap_chain.sample_quality = desc.SampleDesc.Quality;
+
+
+#if 1 
+    ID3D11Texture2D* backbuffer;
+    HRESULT backbuffer_result = s_dx11.swap_chain.handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
+    assert(SUCCEEDED(backbuffer_result));
+
+    D3D11_RENDER_TARGET_VIEW_DESC rtv_desc;
+    ZeroMemory(&rtv_desc, sizeof(rtv_desc));
+    rtv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    rtv_desc.Texture2D.MipSlice = 0;
+
+    //this may not work
+    VERIFY(SUCCEEDED(s_dx11.device->CreateRenderTargetView(
+        backbuffer,             //[in]            ID3D11Resource* pResource,
+        &rtv_desc,                  //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
+        &s_dx11.swap_chain.render_target_view//[out, optional] ID3D11RenderTargetView** ppRTView
+    )));
+#else
+    ID3D11Texture2D* backbuffer;
+    s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
+    s_dx11.device->CreateRenderTargetView(backbuffer, NULL, &s_dx11.swap_chain.render_target_view);
+#endif
+
+    D3D11_TEXTURE2D_DESC backbuffer_desc = {};
+    backbuffer->GetDesc(&backbuffer_desc);
+    SafeRelease(backbuffer);
+
+    D3D11_TEXTURE2D_DESC TextureDesc = {};
+    TextureDesc.Width = backbuffer_desc.Width;
+    TextureDesc.Height = backbuffer_desc.Height;
+    TextureDesc.MipLevels = 1;
+    TextureDesc.ArraySize = 1;
+    TextureDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    TextureDesc.SampleDesc.Count = 1;
+    TextureDesc.SampleDesc.Quality = 0;
+    TextureDesc.Usage = D3D11_USAGE_DEFAULT;
+    TextureDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    TextureDesc.CPUAccessFlags = 0;
+    TextureDesc.MiscFlags = 0;
+
+    VERIFY(SUCCEEDED(s_dx11.device->CreateTexture2D(&TextureDesc, 0, &s_dx11.swap_chain.depth_texture)));
+
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc;
+    ZeroMemory(&dsv_desc, sizeof(dsv_desc));
+    dsv_desc.Format = DXGI_FORMAT_D32_FLOAT;
+    dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+    dsv_desc.Texture2D.MipSlice = 0;
+    VERIFY(SUCCEEDED(s_dx11.device->CreateDepthStencilView(s_dx11.swap_chain.depth_texture, &dsv_desc, &s_dx11.swap_chain.depth_stencil_view)));
+
+    {
+        D3D11_DEPTH_STENCIL_DESC desc;
+        ZeroMemory(&desc, sizeof(desc));
+        // Depth test parameters
+        desc.DepthEnable = true;
+        desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        desc.DepthFunc = D3D11_COMPARISON_LESS;
+
+        // Stencil test parameters
+        desc.StencilEnable = false;
+        desc.StencilReadMask = 0xFF;
+        desc.StencilWriteMask = 0xFF;
+
+        // Stencil operations if pixel is front-facing
+        desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+        desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+        desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+        // Stencil operations if pixel is back-facing
+        desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+        desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+        desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+        // Create depth stencil state
+        VERIFY(SUCCEEDED(s_dx11.device->CreateDepthStencilState(&desc, &s_dx11.swap_chain.depth_stencil_state)));
+    }
+}
+
 void InitializeVideo()
 {
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
     //Is this needed?
-    SDL_SetHint(SDL_HINT_RENDER_DRIVER,         "direct3d11"); 
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER,         "direct3d11");
 
     SDL_Init(SDL_INIT_VIDEO);
     {
@@ -1043,7 +1169,7 @@ void InitializeVideo()
         SDL_DisplayMode display_mode;
         SDL_GetDisplayMode(0, 0, &display_mode);
         g_renderer.refresh_rate = display_mode.refresh_rate;
-        
+
     }
 
     u32 windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI /*SDL_WINDOW_MOUSE_CAPTURE | *//*SDL_WINDOW_MOUSE_FOCUS | *//*SDL_WINDOW_INPUT_GRABBED*/;
@@ -1109,7 +1235,7 @@ void InitializeVideo()
         DXGI_SAMPLE_DESC dxgi_sample_desc;
         {
             //MSAA
-            dxgi_sample_desc.Count      = 1; 
+            dxgi_sample_desc.Count      = 1;
             dxgi_sample_desc.Quality    = 0;
         }
 
@@ -1121,13 +1247,12 @@ void InitializeVideo()
         swap_chain_desc.OutputWindow = hwnd;
         swap_chain_desc.Windowed = TRUE;
         swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL; //Does not work with MSAA
-        swap_chain_desc.Flags = 0; //do we need this?  DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING 
+        swap_chain_desc.Flags = 0; //do we need this?  DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
 
         const D3D_FEATURE_LEVEL feature_levels[]= { D3D_FEATURE_LEVEL_11_0 };
         IDXGISwapChain*         swap_chain      = nullptr;
-        ID3D11Device*           device          = nullptr;
         D3D_FEATURE_LEVEL       feature_level   = {};
-        ID3D11DeviceContext*    device_context  = nullptr;
+        ID3D11DeviceContext*    temp_context    = nullptr;
 
         HRESULT create_device_and_swap_chain_result = D3D11CreateDeviceAndSwapChain(
             nullptr,                    //[in, optional]  IDXGIAdapter               *pAdapter,
@@ -1139,34 +1264,36 @@ void InitializeVideo()
             D3D11_SDK_VERSION,          //                UINT                       SDKVersion,
             &swap_chain_desc,           //[in, optional]  const DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
             &swap_chain,                //[out, optional] IDXGISwapChain             **ppSwapChain,
-            &device,                    //[out, optional] ID3D11Device               **ppDevice,
+            &s_dx11.device,                    //[out, optional] ID3D11Device               **ppDevice,
             &feature_level,             //[out, optional] D3D_FEATURE_LEVEL          *pFeatureLevel,
-            &device_context             //[out, optional] ID3D11DeviceContext        **ppImmediateContext
+            &temp_context               //[out, optional] ID3D11DeviceContext        **ppImmediateContext
         );
         assert(SUCCEEDED(create_device_and_swap_chain_result));
+        assert(s_dx11.device); //FATAL
 
-        s_dx11.swap_chain = swap_chain;
+        VERIFY(SUCCEEDED(temp_context->QueryInterface(IID_PPV_ARGS(&s_dx11.device_context))));
+        temp_context->Release();
+
+        s_dx11.swap_chain.handle = swap_chain;
+        UpdateSwapchain();
 
         // Get factory from device
         IDXGIDevice*    pDXGIDevice  = nullptr;
         IDXGIAdapter*   pDXGIAdapter = nullptr;
         IDXGIFactory*   pFactory     = nullptr;
 
-        if (SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&pDXGIDevice))))
+        if (SUCCEEDED(s_dx11.device->QueryInterface(IID_PPV_ARGS(&pDXGIDevice))))
             if (SUCCEEDED(pDXGIDevice->GetParent(IID_PPV_ARGS(&pDXGIAdapter))))
                 if (SUCCEEDED(pDXGIAdapter->GetParent(IID_PPV_ARGS(&pFactory))))
                 {
-
-                    s_dx11.device          = device;
-                    s_dx11.device_context  = device_context;
                     s_dx11.factory         = pFactory;
                 }
-        assert(s_dx11.device); //FATAL
         if (pDXGIDevice) pDXGIDevice->Release();
         if (pDXGIAdapter) pDXGIAdapter->Release();
         s_dx11.device->AddRef();
         s_dx11.device_context->AddRef();
     }
+    ReportDX11References();
 
     {
         HINSTANCE dll_instance = LoadLibrary("d3dcompiler_47.dll");
@@ -1193,38 +1320,12 @@ void InitializeVideo()
 #if 0 //OpenGL code
     /* This makes our buffer swap syncronized with the monitor's vertical refresh */
     SDL_GL_SetSwapInterval(g_renderer.swapInterval);
-    glewExperimental = true;
-    GLenum err = glewInit();
-    if (GLEW_OK != err)
-    {
-        /* Problem: glewInit failed, something is seriously wrong. */
-        DebugPrint("Error: %s\n", glewGetErrorString(err));
-    }
-    DebugPrint("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
-
-    //stbi_set_flip_vertically_on_load(true);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    //glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
-    glClearColor(0.263f, 0.706f, 0.965f, 0.0f);
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(OpenGLErrorCallback, NULL);
-    //glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, GL_FALSE);
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_CULL_FACE);
-    //glEnable(GL_FRAMEBUFFER_SRGB);
-
-    glGenVertexArrays(1, &g_renderer.vao);
-    glBindVertexArray(g_renderer.vao);
 #endif
 
     //Create Textures:
     CreateTexture(&g_renderer.textures[Texture::Index_Minecraft], "assets/MinecraftSpriteSheet20120215Modified.png", Texture::Format_R8G8B8A8_UNORM_SRGB, Texture::Filter_Point);
     u8 pixel_texture_data[] = { 255, 255, 255, 255 };
     CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
-    //CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Aniso);
     CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
 
     //Create Shaders:
@@ -1261,6 +1362,7 @@ void InitializeVideo()
     //        { "COLOR",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, color),D3D11_INPUT_PER_VERTEX_DATA, 0 } };
     //    g_renderer.shaders[+Shader::Cube] = new ShaderProgram("Source/Shaders/Cube.vert", "Source/Shaders/Cube.frag", layout, arrsize(layout));
     //}
+#if 0
     {
         //Depth Buffer
         Texture::TextureParams t = {
@@ -1274,12 +1376,13 @@ void InitializeVideo()
         };
         CreateTexture(&g_renderer.textures[Texture::Index_BackbufferDepth], t);
     }
+#endif
 
     //Create Buffers:
     CreateGpuBuffer(&g_renderer.quad_ib,        "Quad_IB",          true,   GpuBuffer::Type::Index);
     FillIndexBuffer(g_renderer.quad_ib, 6 * 4);
-    CreateGpuBuffer(&g_renderer.voxel_rast_vb,  "Voxel_Rast_VB",    true,   GpuBuffer::Type::Vertex);
-    CreateGpuBuffer(&g_renderer.box_vb,         "Box_VB",           false,  GpuBuffer::Type::Vertex);
+    //CreateGpuBuffer(&g_renderer.voxel_rast_vb,  "Voxel_Rast_VB",    true,   GpuBuffer::Type::Vertex);
+    //CreateGpuBuffer(&g_renderer.box_vb,         "Box_VB",           false,  GpuBuffer::Type::Vertex);
     CreateGpuBuffer(&g_renderer.cube_vb,        "Cube_VB",          false,  GpuBuffer::Type::Vertex);
     {
         float p = 0.5f;
@@ -1312,7 +1415,7 @@ void InitializeVideo()
               { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
 
 
-              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y 
+              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y
               { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
               { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
 
@@ -1345,7 +1448,7 @@ void InitializeVideo()
         {
             voxel_box_vertices[i] = vertices[i].p;
         }
-        g_renderer.box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices), sizeof(voxel_box_vertices[0]));
+        //g_renderer.box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices), sizeof(voxel_box_vertices[0]));
     }
     {
         CreateGpuBuffer(&g_renderer.voxel_vb, "Voxel_VB", false, GpuBuffer::Type::Vertex);
@@ -1421,10 +1524,11 @@ void InitializeVideo()
         desc.AntialiasedLineEnable = FALSE;
         s_dx11.device->CreateRasterizerState(&desc, &s_dx11.rasterizer_voxel);
     }
-    
+
+#if 0
     {
         ID3D11Texture2D* backbuffer;
-        HRESULT backbuffer_result = s_dx11.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
+        HRESULT backbuffer_result = s_dx11.swap_chain.handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
         assert(SUCCEEDED(backbuffer_result));
 
         D3D11_RENDER_TARGET_VIEW_DESC desc;
@@ -1434,32 +1538,20 @@ void InitializeVideo()
         desc.Texture2D.MipSlice = 0;
 
         //this may not work
-        HRESULT create_view_result = s_dx11.device->CreateRenderTargetView(
+        HRESULT result = s_dx11.device->CreateRenderTargetView(
             backbuffer,             //[in]            ID3D11Resource* pResource,
             &desc,                  //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
-            &s_dx11.backbuffer_view //[out, optional] ID3D11RenderTargetView** ppRTView
+            &s_dx11.swap_chain.render_target_view//[out, optional] ID3D11RenderTargetView** ppRTView
         );
+        SafeRelease(backbuffer);
+        assert(SUCCEEDED(result));
     }
+#endif
 
     InitializeImGui();
 }
 
-void FrameBufferUpdate(const Vec2I& size)
-{
-    if (size == g_renderer.size)
-    {
-        return;
-    }
-    s_dx11.swap_chain->Release();
-    HRESULT result = s_dx11.swap_chain->ResizeBuffers(
-        2,                          //UINT        BufferCount, IS THIS RIGHT???
-        size.x,                     //UINT        Width,
-        size.y,                     //UINT        Height,
-        DXGI_FORMAT_R8G8B8A8_UNORM, //DXGI_FORMAT NewFormat,
-        0                           //UINT        SwapChainFlags
-        );
-    assert(result);
-}
+
 
 Vec3 Step(Vec3 a, float b)
 {
@@ -1494,12 +1586,15 @@ void RenderUpdate(Vec2I windowSize, float deltaTime)
 {
     ZoneScopedN("Render Update");
 
-    ID3D11Texture2D* backbuffer;
-    HRESULT backbuffer_result = s_dx11.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
-    assert(SUCCEEDED(backbuffer_result));
+    //Vec2I window_size;
+    //SDL_GetWindowSizeInPixels(g_renderer.SDL_Context, &window_size.x, &window_size.y);
+    if (s_dx11.swap_chain.size != g_renderer.size)
+        UpdateSwapchain();
+
     DX11Texture* depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_BackbufferDepth]);
-    s_dx11.device_context->ClearRenderTargetView(s_dx11.backbuffer_view, srgb_to_linear(backgroundColor).e);
-    s_dx11.device_context->ClearDepthStencilView(depth->m_depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+    s_dx11.device_context->ClearRenderTargetView(s_dx11.swap_chain.render_target_view, srgb_to_linear(backgroundColor).e);
+    //s_dx11.device_context->ClearDepthStencilView( depth->m_depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+    s_dx11.device_context->ClearDepthStencilView(s_dx11.swap_chain.depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
     if (s_last_shader_update_time + 0.1f <= s_incremental_time)
     {
@@ -1511,15 +1606,6 @@ void RenderUpdate(Vec2I windowSize, float deltaTime)
         s_last_shader_update_time = s_incremental_time;
     }
     s_incremental_time += deltaTime;
-
-    //SDL_GL_SetSwapInterval(g_renderer.swapInterval);
-
-
-    Vec2I window_size;
-    SDL_GetWindowSizeInPixels(g_renderer.SDL_Context, &window_size.x, &window_size.y);
-    assert(window_size.x > 0);
-    assert(window_size.y > 0);
-    FrameBufferUpdate(window_size);
 }
 
 
@@ -1584,7 +1670,7 @@ void TextureArray::Update(float anisotropicAmount)
     if (anisotropicAmount == m_anisotropicAmount)
         return;
     m_anisotropicAmount = anisotropicAmount;
-    
+
     Bind();
     glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, m_anisotropicAmount);
 }
@@ -1713,7 +1799,7 @@ void TextureCube::Bind()
 
 void RenderPresent()
 {
-    s_dx11.swap_chain->Present(1, 0);
+    s_dx11.swap_chain.handle->Present(1, 0);
 }
 
 void DrawPathTracedVoxels()
@@ -1785,8 +1871,10 @@ void DrawPathTracedVoxels()
 #if 0
         context->OMSetRenderTargets(1, &s_dx11.backbuffer_view, NULL);
 #else
-        context->OMSetDepthStencilState(depth->m_depth_stencil_state, 1);
-        context->OMSetRenderTargets(1, &s_dx11.backbuffer_view, depth->m_depth_stencil_view);
+        //context->OMSetDepthStencilState(depth->m_depth_stencil_state, 1);
+        //context->OMSetRenderTargets(1, &s_dx11.swap_chain.render_target_view, depth->m_depth_stencil_view);
+        context->OMSetDepthStencilState(s_dx11.swap_chain.depth_stencil_state, 1);
+        context->OMSetRenderTargets(1, &s_dx11.swap_chain.render_target_view, s_dx11.swap_chain.depth_stencil_view);
 #endif
     }
 
@@ -1847,7 +1935,6 @@ void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11Rasteriz
     //DX11Texture* plain          = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Minecraft]);
     DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.cube_vb);
     DX11GpuBuffer* ib           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.quad_ib);
-    DX11Texture* depth          = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_BackbufferDepth]);
 
     {
         ZoneScopedN("Upload");
@@ -1911,8 +1998,8 @@ void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11Rasteriz
 #if 0
         context->OMSetRenderTargets(1, &s_dx11.backbuffer_view, NULL);
 #else
-        context->OMSetDepthStencilState(depth->m_depth_stencil_state, 1);
-        context->OMSetRenderTargets(1, &s_dx11.backbuffer_view, depth->m_depth_stencil_view);
+        context->OMSetDepthStencilState(s_dx11.swap_chain.depth_stencil_state, 1);
+        context->OMSetRenderTargets(1, &s_dx11.swap_chain.render_target_view, s_dx11.swap_chain.depth_stencil_view);
         context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
 #endif
     }
@@ -1936,7 +2023,7 @@ void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11Rasteriz
 void RenderTransparentCubes()
 {
     ZoneScopedN("Upload and Render Transparent Cubes");
-    RenderCubesInternal(s_cubesToDraw_transparent, s_dx11.rasterizer_full, reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Minecraft]));
+    RenderCubesInternal(s_cubesToDraw_transparent, s_dx11.rasterizer_full, reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Plain]));
 }
 
 void RenderOpaqueCubes()

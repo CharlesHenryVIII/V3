@@ -370,35 +370,11 @@ int main(int argc, char* argv[])
                     ray.origin = voxel_rays[i].p + ray.direction * 0.0001f;
                 }
             }
-            Color c = {};
-            c.a = 1.0f;
-            c = { 0.1f, 0.1f, 0.1f, 1.0f };
-            //c = { 1.0f, 1.0f, 1.0f, 1.0f };
-            for (i32 i = RAY_BOUNCES - 1; i >= 0; i--)
-            {
-                if (voxel_rays[i].success)
-                {
-                    ColorInt a;
-                    a.rgba = voxels.materials[voxel_rays[i].success].color.rgba;
-                    Color temp = ToColor(a);
-                    //c.r *= temp.r / (i + 1);
-                    //c.g *= temp.g / (i + 1);
-                    //c.b *= temp.b / (i + 1);
-                    c = c * temp;
-                    AddCubeToRender(voxel_rays[i].p, c, 0.5f, false);
-                }
-                else
-                {
-                    c.r = 1.0f;
-                    c.g = 1.0f;
-                    c.b = 1.0f;
-                }
-            }
             {
                 Vec3 voxel_size = ToVec3(voxels.size);
                 AddCubeToRender(voxel_size / 2.0f, Orange, voxel_size, true);
             }
-            AddCubeToRender({}, Color(1.0f, 1.0f, 1.0f, 0.999f), 5, false);
+            AddCubeToRender({}, White, 5, false);
 
             RaycastResult voxel_hit_result = voxel_rays[0];
 
@@ -514,10 +490,6 @@ int main(int argc, char* argv[])
             }
 #endif
 
-            {
-                Vec3 voxels_size = ToVec3(voxels.size);
-                //AddCubeToRender(voxels_size / 2.0f, transRed, voxels_size);
-            }
             {
                 ZoneScopedN("Cube Render");
                 g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);

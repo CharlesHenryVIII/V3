@@ -717,7 +717,7 @@ struct PointColor {
 
 #define ENABLE_SHADOWS 1
 #define RAY_BOUNCES 3
-#define RAY_SAMPLES 4
+#define RAY_SAMPLES 3
 
     const float3 background_color   = srgb_to_linear(float4(0.263, 0.706, 0.965, 1)).rgb;
     const float3 sun_position       = float3(0, 50, 50);
@@ -758,14 +758,22 @@ struct PointColor {
     }
 
 
+#if RAY_SAMPLES > 1
     for (int i = 0; i < RAY_SAMPLES; i++)
+#else
+        int i = 0;
+#endif
     {
         uint    hit_voxel_color_index = start_hit_voxel_color_index;
         float3  hit_voxel_p = start_hit_voxel_p;
         float   hit_voxel_distance_mag = start_hit_voxel_distance_mag;
         float3  hit_voxel_normal = start_hit_voxel_normal;
 
+#if RAY_BOUNCES > 1
         for (int j = 0; j < RAY_BOUNCES; j++)
+#else
+            int j = 0;
+#endif
         {
             if (hit_voxel_color_index == 0)
             {
@@ -828,7 +836,7 @@ struct PointColor {
 
             const float4 hit_color = GetColorFromIndex(hit_voxel_color_index);
             bounce_color.rgb += hit_color.rgb * sun_color * light_amount * bounce_color_strength;
-            bounce_color_strength = bounce_color_strength * 0.5;
+            bounce_color_strength = bounce_color_strength * 0.25;
 
             next_ray_direction = reflect(next_ray_direction, shifted_normal);
             next_ray_origin      = hit_voxel_p + next_ray_direction * 0.00001;
@@ -850,7 +858,7 @@ struct PointColor {
 
 #elif RAY_METHOD == RAY_PATH_TRACING
 
-    const int samples   = 4;
+    const int samples   = 3;
     const int max_depth = 3;
 
     float4 _color = float4(0, 0, 0, 1);

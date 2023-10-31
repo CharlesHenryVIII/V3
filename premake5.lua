@@ -16,8 +16,9 @@ project "V3"
     links {
         "SDL2",
         "SDL2main",
-        --"OpenGL32",
         "d3d11.lib",
+        "dxgi.lib",
+        "dxguid.lib",
     }
 
     libdirs {

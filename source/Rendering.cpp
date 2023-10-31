@@ -14,6 +14,7 @@
 // DirectX
 #include <d3d11.h>
 #include <d3dcompiler.h>
+#include <dxgi.h>
 //#ifdef _MSC_VER
 //#pragma comment(lib, "d3dcompiler") // Automatically link with d3dcompiler.lib as we are using D3DCompile() below.
 //#endif
@@ -766,7 +767,7 @@ bool ShaderProgram::CompileShader(std::string text, const std::string& file_name
 #if _DEBUG
     //;
     flags1 |= D3DCOMPILE_DEBUG;
-#if 1
+#if 0
     flags1 |= D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_OPTIMIZATION_LEVEL0;
     //flags1 |= D3DCOMPILE_SKIP_VALIDATION; //dont do this
 #else
@@ -1150,6 +1151,7 @@ void UpdateSwapchain()
     }
 }
 
+//#pragma comment(lib, "dxgi.lib")
 void InitializeVideo()
 {
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
@@ -1183,11 +1185,11 @@ void InitializeVideo()
 
 
     {
-        //Do we need to really do this?
 #if 0
+        //Do we need to really do this?
         {
             IDXGIFactory* factory;
-            VALIDATE(CreateDXGIFactory(IID_PPV_ARGS(&factory)));
+            VERIFY(SUCCEEDED(CreateDXGIFactory(IID_PPV_ARGS(&factory))));
             assert(factory);
             IDXGIAdapter* aOutput;
             for (UINT i = 0; factory->EnumAdapters(i, &aOutput) != DXGI_ERROR_NOT_FOUND; i++)
@@ -1195,19 +1197,13 @@ void InitializeVideo()
                 DXGI_ADAPTER_DESC desc;
                 HRESULT r = aOutput->GetDesc(&desc);
                 desc.Description;
-            }
-
-
-            UINT i = 0;
-            IDXGIOutput* pOutput;
-            std::vector<IDXGIOutput*> vOutputs;
-            for (UINT i = 0; pAdapter->EnumOutputs(i, &pOutput) != DXGI_ERROR_NOT_FOUND; i++)
-            {
-                vOutputs.push_back(pOutput);
-                ++i;
+                UINT id = desc.VendorId;
             }
         }
 #endif
+
+
+
         UINT flags = 0;
 //#if _DEBUG
         flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -1293,7 +1289,6 @@ void InitializeVideo()
         s_dx11.device->AddRef();
         s_dx11.device_context->AddRef();
     }
-    ReportDX11References();
 
     {
         HINSTANCE dll_instance = LoadLibrary("d3dcompiler_47.dll");
@@ -1327,6 +1322,8 @@ void InitializeVideo()
     u8 pixel_texture_data[] = { 255, 255, 255, 255 };
     CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
     CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
+
+    //CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_])
 
     //Create Shaders:
     //{
@@ -1362,21 +1359,6 @@ void InitializeVideo()
     //        { "COLOR",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, color),D3D11_INPUT_PER_VERTEX_DATA, 0 } };
     //    g_renderer.shaders[+Shader::Cube] = new ShaderProgram("Source/Shaders/Cube.vert", "Source/Shaders/Cube.frag", layout, arrsize(layout));
     //}
-#if 0
-    {
-        //Depth Buffer
-        Texture::TextureParams t = {
-        .size = ToVec3I(g_renderer.size, 0),
-        .format = Texture::Format_D32_FLOAT,
-        .mode = Texture::Address_Invalid,
-        .filter = Texture::Filter_Invalid,
-        .type = Texture::Type_Depth,
-        .bytes_per_pixel = 0,
-        .data = nullptr,
-        };
-        CreateTexture(&g_renderer.textures[Texture::Index_BackbufferDepth], t);
-    }
-#endif
 
     //Create Buffers:
     CreateGpuBuffer(&g_renderer.quad_ib,        "Quad_IB",          true,   GpuBuffer::Type::Index);
@@ -1525,29 +1507,6 @@ void InitializeVideo()
         s_dx11.device->CreateRasterizerState(&desc, &s_dx11.rasterizer_voxel);
     }
 
-#if 0
-    {
-        ID3D11Texture2D* backbuffer;
-        HRESULT backbuffer_result = s_dx11.swap_chain.handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
-        assert(SUCCEEDED(backbuffer_result));
-
-        D3D11_RENDER_TARGET_VIEW_DESC desc;
-        ZeroMemory(&desc, sizeof(desc));
-        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-        desc.Texture2D.MipSlice = 0;
-
-        //this may not work
-        HRESULT result = s_dx11.device->CreateRenderTargetView(
-            backbuffer,             //[in]            ID3D11Resource* pResource,
-            &desc,                  //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
-            &s_dx11.swap_chain.render_target_view//[out, optional] ID3D11RenderTargetView** ppRTView
-        );
-        SafeRelease(backbuffer);
-        assert(SUCCEEDED(result));
-    }
-#endif
-
     InitializeImGui();
 }
 
@@ -1591,7 +1550,6 @@ void RenderUpdate(Vec2I windowSize, float deltaTime)
     if (s_dx11.swap_chain.size != g_renderer.size)
         UpdateSwapchain();
 
-    DX11Texture* depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_BackbufferDepth]);
     s_dx11.device_context->ClearRenderTargetView(s_dx11.swap_chain.render_target_view, srgb_to_linear(backgroundColor).e);
     //s_dx11.device_context->ClearDepthStencilView( depth->m_depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
     s_dx11.device_context->ClearDepthStencilView(s_dx11.swap_chain.depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -1809,7 +1767,6 @@ void DrawPathTracedVoxels()
     DX11Texture* voxel_indices  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices]);
     DX11Texture* random         = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Random]);
     DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
-    DX11Texture* depth          = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_BackbufferDepth]);
 
     //Bindings
     {

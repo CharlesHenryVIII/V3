@@ -23,7 +23,6 @@ struct Texture {
         Index_Plain,
         Index_Voxel_Indices,
         Index_Random,
-        Index_BackbufferDepth,
         Index_Count,
     }; ENUMOPS(Index);
     enum Dimension : u32 {

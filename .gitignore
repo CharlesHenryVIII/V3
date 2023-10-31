@@ -54,7 +54,7 @@ imgui.ini
 #*.exe
 *.out
 *.app
-*.bat
+#*.bat
 
 # Log Files
 *.dmp

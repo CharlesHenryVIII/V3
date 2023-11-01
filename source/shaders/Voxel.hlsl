@@ -373,9 +373,6 @@ float3 Random_Texture(int depth, int sample_index, int2 pixel_position)
     uint i = uint(depth_scaled + index_scaled + pixels_scaled);
             /*(total_time * 10) + */
     float2 p;
-    p.y = ((float(i) / float(random_texture_size.x)) % float(random_texture_size.y)) / float(random_texture_size.y);
-    p.x = ((float(i) % float(random_texture_size.x))) / float(random_texture_size.x);
-
     float2 size = float2(random_texture_size.xy);
     float index = float(i);
     p.y = (index / size.x) / size.y;

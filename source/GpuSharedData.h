@@ -12,6 +12,11 @@
 //Cube Draw call
 #define SLOT_CUBE_TEXTURE 0
 #define SLOT_CUBE_TEXTURE_SAMPLER 0
+//Final Draw Call
+#define SLOT_PREVIOUS_TARGET 0
+#define SLOT_PREVIOUS_TARGET_SAMPLER 0
+#define SLOT_PREVIOUS_DEPTH 1
+#define SLOT_PREVIOUS_DEPTH_SAMPLER 1
 
 #ifdef __cplusplus
 

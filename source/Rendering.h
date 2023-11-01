@@ -23,6 +23,8 @@ struct Texture {
         Index_Plain,
         Index_Voxel_Indices,
         Index_Random,
+        Index_Backbuffer_Depth,
+        Index_Backbuffer_HDR,
         Index_Count,
     }; ENUMOPS(Index);
     enum Dimension : u32 {
@@ -49,6 +51,7 @@ struct Texture {
     }; ENUMOPS(AddressMode);
     enum Format : u32 {
         Format_Invalid,
+        Format_R11G11B10_FLOAT,
         Format_D32_FLOAT,
         Format_D16_UNORM,
         Format_R8G8B8A8_UNORM,
@@ -70,6 +73,7 @@ struct Texture {
         AddressMode mode = Address_Wrap;
         Filter filter = Filter_Aniso;
         Type type = Type_Texture;
+        bool render_target;
         i32 bytes_per_pixel;
         const void* data;
     };
@@ -78,6 +82,7 @@ struct Texture {
     i32 m_bytes_per_pixel = 0;//bytes per pixel
     Dimension m_dimension;
     Type m_type;
+    TextureParams m_parameters;
 };
 
 bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format format, i32 bytes_per_pixel);
@@ -155,6 +160,7 @@ struct ShaderProgram
         Index_Voxel_Rast,
         Index_Voxel,
         Index_Cube,
+        Index_Final_Draw,
         Index_Count,
     };
     ENUMOPS(ShaderIndex);
@@ -237,6 +243,7 @@ inline  void AddCubeToRender(Vec3 p, Color color, float scale, bool wireframe) {
 void RenderTransparentCubes();
 void RenderOpaqueCubes();
 void RenderWireframeCubes();
+void FinalDraw();
 
 
 enum class MessageBoxType {

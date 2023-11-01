@@ -90,12 +90,13 @@ int main(int argc, char* argv[])
     {
 
         Texture::TextureParams voxel_indices_parameters = {
-            .size = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
+            .size   = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
             .format = Texture::Format_R8_UINT,
             .mode   = Texture::Address_Clamp,
             .filter = Texture::Filter_Point,
+            .render_target = false,
             .bytes_per_pixel = sizeof(voxels.color_indices[0].e[0][0][0]),
-            .data = voxels.color_indices[0].e,
+            .data   = voxels.color_indices[0].e,
         };
         CreateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], voxel_indices_parameters);
         CreateGpuBuffer(&g_renderer.structure_voxel_materials,"voxel_materials", false, GpuBuffer::Type::Structure);
@@ -497,7 +498,10 @@ int main(int argc, char* argv[])
                 RenderTransparentCubes();
                 RenderWireframeCubes();
             }
-
+            {
+                ZoneScopedN("Final Draw");
+                FinalDraw();
+            }
 
             {
                 ZoneScopedN("ImGui Render");

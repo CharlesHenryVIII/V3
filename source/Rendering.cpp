@@ -86,6 +86,7 @@ void ReportDX11References() {};
 
 
 
+
 //************
 //Texture
 //************
@@ -107,7 +108,7 @@ struct DX11Texture : public Texture {
 void DeleteTexture(Texture** texture)
 {
     VALIDATE(texture);
-    VALIDATE(*texture == nullptr);
+    VALIDATE(*texture != nullptr);
     DX11Texture* tex = reinterpret_cast<DX11Texture*>(*texture);
     switch (tex->m_dimension)
     {
@@ -128,6 +129,7 @@ void DeleteTexture(Texture** texture)
         SafeRelease(tex->m_view);
     }
     delete tex;
+    *texture = nullptr;
 }
 
 bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format format, i32 bytes_per_pixel)
@@ -967,6 +969,32 @@ void ShaderProgram::CheckForUpdate()
 
 
 
+void CreateRenderTargetView(ID3D11RenderTargetView** rtv, DXGI_FORMAT format, ID3D11Texture2D* texture)
+{
+    assert(rtv);
+    if (*rtv)
+    {
+        SafeRelease(*rtv);
+        *rtv = nullptr;
+    }
+
+    D3D11_RENDER_TARGET_VIEW_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Format = format;
+    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    desc.Texture2D.MipSlice = 0;
+
+    VERIFY(SUCCEEDED(s_dx11.device->CreateRenderTargetView(
+        texture,    //[in]            ID3D11Resource* pResource,
+        &desc,      //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
+        rtv         //[out, optional] ID3D11RenderTargetView** ppRTView
+    )));
+}
+void CreateRenderTargetView(ID3D11RenderTargetView** rtv, Texture::Index texture_index)
+{
+    DX11Texture* t = reinterpret_cast<DX11Texture*>(g_renderer.textures[texture_index]);
+    CreateRenderTargetView(rtv, t->m_format, t->m_texture2D);
+}
 
 
 void FillIndexBuffer(GpuBuffer* ib, size_t count)
@@ -1041,15 +1069,12 @@ void InitializeImGui()
 void UpdateSwapchain(const Vec2I& window_size)
 {
     SafeRelease(s_dx11.swap_chain.render_target_view);
-    //SafeRelease(s_dx11.swap_chain.depth_stencil_view);
-    //SafeRelease(s_dx11.swap_chain.depth_stencil_state);
-    //SafeRelease(s_dx11.swap_chain.depth_texture);
     HRESULT result = s_dx11.swap_chain.handle->ResizeBuffers(
-        0,//2,                          //UINT        BufferCount, IS THIS RIGHT???
-        (UINT)window_size.x,                     //UINT        Width,
-        (UINT)window_size.y,                     //UINT        Height,
+        0,                  //UINT        BufferCount, IS THIS RIGHT???
+        (UINT)window_size.x,//UINT        Width,
+        (UINT)window_size.y,//UINT        Height,
         DXGI_FORMAT_UNKNOWN,//DXGI_FORMAT_R8G8B8A8_UNORM, //DXGI_FORMAT NewFormat,
-        0                           //UINT        SwapChainFlags
+        0                   //UINT        SwapChainFlags
     );
     assert(SUCCEEDED(result));
 
@@ -1064,27 +1089,9 @@ void UpdateSwapchain(const Vec2I& window_size)
     s_dx11.swap_chain.sample_quality = desc.SampleDesc.Quality;
 
 
-#if 1 
     ID3D11Texture2D* backbuffer;
-    HRESULT backbuffer_result = s_dx11.swap_chain.handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
-    assert(SUCCEEDED(backbuffer_result));
-
-    D3D11_RENDER_TARGET_VIEW_DESC rtv_desc;
-    ZeroMemory(&rtv_desc, sizeof(rtv_desc));
-    rtv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    rtv_desc.Texture2D.MipSlice = 0;
-
-    VERIFY(SUCCEEDED(s_dx11.device->CreateRenderTargetView(
-        backbuffer,             //[in]            ID3D11Resource* pResource,
-        &rtv_desc,                  //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
-        &s_dx11.swap_chain.render_target_view//[out, optional] ID3D11RenderTargetView** ppRTView
-    )));
-#else
-    ID3D11Texture2D* backbuffer;
-    s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
-    s_dx11.device->CreateRenderTargetView(backbuffer, NULL, &s_dx11.swap_chain.render_target_view);
-#endif
+    assert(SUCCEEDED(s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer))));
+    CreateRenderTargetView(&s_dx11.swap_chain.render_target_view, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, backbuffer);
 
     D3D11_TEXTURE2D_DESC backbuffer_desc = {};
     backbuffer->GetDesc(&backbuffer_desc);
@@ -1109,8 +1116,10 @@ void UpdateSwapchain(const Vec2I& window_size)
             assert(tp.size.z == 0);
             DeleteTexture(t);
             CreateTexture(t, tp);
+            CreateRenderTargetView(&s_dx11.hdr_rtv, Texture::Index_Backbuffer_HDR);
         }
     }
+
 }
 
 //#pragma comment(lib, "dxgi.lib")
@@ -1497,25 +1506,7 @@ void InitializeVideo()
         desc.AntialiasedLineEnable = FALSE;
         s_dx11.device->CreateRasterizerState(&desc, &s_dx11.rasterizer_voxel);
     }
-    {
-        //ID3D11Texture2D* backbuffer;
-        //HRESULT backbuffer_result = s_dx11.swap_chain.handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backbuffer);
-        //assert(SUCCEEDED(backbuffer_result));
-
-        DX11Texture* target = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
-
-        D3D11_RENDER_TARGET_VIEW_DESC desc;
-        ZeroMemory(&desc, sizeof(desc));
-        desc.Format = target->m_format;
-        desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-        desc.Texture2D.MipSlice = 0;
-
-        VERIFY(SUCCEEDED(s_dx11.device->CreateRenderTargetView(
-            target->m_texture2D,//[in]            ID3D11Resource* pResource,
-            &desc,              //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
-            &s_dx11.hdr_rtv     //[out, optional] ID3D11RenderTargetView** ppRTView
-        )));
-    }
+    CreateRenderTargetView(&s_dx11.hdr_rtv, Texture::Index_Backbuffer_HDR);
     {
         D3D11_DEPTH_STENCIL_DESC desc;
         ZeroMemory(&desc, sizeof(desc));

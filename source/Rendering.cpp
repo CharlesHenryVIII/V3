@@ -71,15 +71,29 @@ extern "C" {
 }
 
 #if _DEBUG
-void ReportDX11References()
-{
-    ID3D11Debug* debug_interface;
-    s_dx11.device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug_interface);
-    HRESULT result = debug_interface->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
-    assert(SUCCEEDED(result));
-}
+    
+    #ifndef HR
+        #define HR(x)                                       \
+        {                                                   \
+            HRESULT hresult = x;                            \
+            if(FAILED(hresult))                             \
+            {                                               \
+                assert(false);                              \
+            }                                               \
+        }
+    #endif
+
+    void ReportDX11References()
+    {
+        ID3D11Debug* debug_interface;
+        s_dx11.device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug_interface);
+        HR(debug_interface->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL));
+    }
 #else
-void ReportDX11References() {};
+    void ReportDX11References() {};
+    #ifndef HR
+    #define HR(x) x;
+    #endif
 #endif
 
 
@@ -214,8 +228,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         desc.CPUAccessFlags = 0;
         desc.MiscFlags = 0;
 
-        HRESULT result = s_dx11.device->CreateTexture2D(&desc, NULL, &tex->m_texture2D);
-        assert(SUCCEEDED(result));
+        HR(s_dx11.device->CreateTexture2D(&desc, NULL, &tex->m_texture2D));
     }
     {
 
@@ -226,11 +239,10 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         desc.Texture2D.MipSlice = 0;
 
         // Create the depth stencil view
-        HRESULT result = s_dx11.device->CreateDepthStencilView(
+        HR(s_dx11.device->CreateDepthStencilView(
             tex->m_texture2D,               // Depth stencil texture
             &desc,                          // Depth stencil desc
-            &tex->m_depth_stencil_view);    // [out] Depth stencil view
-        assert(SUCCEEDED(result));
+            &tex->m_depth_stencil_view));    // [out] Depth stencil view
     }
     return true;
     }
@@ -259,8 +271,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             subResource.SysMemPitch = desc.Width * tex->m_bytes_per_pixel;
             subResource.SysMemSlicePitch = 0;
 
-            HRESULT result = s_dx11.device->CreateTexture1D(&desc, &subResource, &tex->m_texture1D);
-            assert(SUCCEEDED(result));
+            HR(s_dx11.device->CreateTexture1D(&desc, &subResource, &tex->m_texture1D));
         }
 
         //Create View
@@ -271,8 +282,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE1D;
             desc.Texture1D.MipLevels = 1;
             desc.Texture1D.MostDetailedMip = 0;
-            HRESULT result = s_dx11.device->CreateShaderResourceView(tex->m_texture1D, &desc, &tex->m_view);
-            assert(SUCCEEDED(result));
+            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture1D, &desc, &tex->m_view));
         }
         break;
     }
@@ -305,8 +315,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
                 sub_resource = &sub_resource_actual;
             }
 
-            HRESULT result = s_dx11.device->CreateTexture2D(&desc, sub_resource, &tex->m_texture2D);
-            assert(SUCCEEDED(result));
+            HR(s_dx11.device->CreateTexture2D(&desc, sub_resource, &tex->m_texture2D));
         }
 
         //Create View
@@ -317,8 +326,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
             desc.Texture2D.MipLevels = 1;
             desc.Texture2D.MostDetailedMip = 0;
-            HRESULT result = s_dx11.device->CreateShaderResourceView(tex->m_texture2D, &desc, &tex->m_view);
-            assert(SUCCEEDED(result));
+            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture2D, &desc, &tex->m_view));
         }
         break;
     }
@@ -343,8 +351,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             subResource.SysMemPitch = desc.Width * tex->m_bytes_per_pixel;
             subResource.SysMemSlicePitch = desc.Height * subResource.SysMemPitch;
 
-            HRESULT result = s_dx11.device->CreateTexture3D(&desc, &subResource, &tex->m_texture3D);
-            assert(SUCCEEDED(result));
+            HR(s_dx11.device->CreateTexture3D(&desc, &subResource, &tex->m_texture3D));
         }
 
         //Create View
@@ -355,8 +362,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE3D;
             desc.Texture3D.MipLevels = 1;
             desc.Texture3D.MostDetailedMip = 0;
-            HRESULT result = s_dx11.device->CreateShaderResourceView(tex->m_texture3D, &desc, &tex->m_view);
-            assert(SUCCEEDED(result));
+            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture3D, &desc, &tex->m_view));
         }
         break;
     }
@@ -389,8 +395,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 0.0f;
         desc.MinLOD = 0;
         desc.MaxLOD = 0;
-        HRESULT result = s_dx11.device->CreateSamplerState(&desc, &tex->m_sampler);
-        assert(SUCCEEDED(result));
+        HR(s_dx11.device->CreateSamplerState(&desc, &tex->m_sampler));
     }
     return true;
 }
@@ -468,12 +473,11 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
             dx11_data.SysMemPitch = memory_pitch;
             dx11_data.SysMemSlicePitch = 0;
 
-            HRESULT result = s_dx11.device->CreateBuffer(
+            HR(s_dx11.device->CreateBuffer(
                 &desc,          //[in]            const D3D11_BUFFER_DESC * pDesc,
                 &dx11_data,     //[in, optional]  const D3D11_SUBRESOURCE_DATA * pInitialData,
                 &buf->m_buffer  //[out, optional] ID3D11Buffer * *ppBuffer
-            );
-            assert(SUCCEEDED(result));
+            ));
         }
         DEBUG_LOG("Created and Uploaded data to gpu buffer: element: %i size: %i", element_size, count);
 
@@ -485,12 +489,11 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
             desc.ViewDimension = D3D_SRV_DIMENSION_BUFFER;
             desc.Buffer.FirstElement = 0;
             desc.Buffer.NumElements = (UINT)count;
-            HRESULT result = s_dx11.device->CreateShaderResourceView(
+            HR(s_dx11.device->CreateShaderResourceView(
                 buf->m_buffer,                  //[in]            ID3D11Resource * pResource,
                 &desc,                          //[in, optional]  const D3D11_SHADER_RESOURCE_VIEW_DESC * pDesc,
                 &buf->structure_resource_view   //[out, optional] ID3D11ShaderResourceView * *ppSRView
-            );
-            assert(SUCCEEDED(result));
+            ));
         }
 
         return;
@@ -501,14 +504,13 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
         //map/unmap/memcopy
         D3D11_MAPPED_SUBRESOURCE resource;
         ZeroMemory(&resource, sizeof(D3D11_MAPPED_SUBRESOURCE));
-        HRESULT result = s_dx11.device_context->Map(
+        HR(s_dx11.device_context->Map(
             buf->m_buffer,          //[in]            ID3D11Resource * pResource,
             0,                      //[in]            UINT                     Subresource,
             D3D11_MAP_WRITE_DISCARD,//[in]            D3D11_MAP                MapType,
             0,                      //[in]            UINT                     MapFlags,
             &resource               //[out, optional] D3D11_MAPPED_SUBRESOURCE * pMappedResource
-        );
-        assert(SUCCEEDED(result));
+        ));
         memcpy(resource.pData, data, element_size * count);
         s_dx11.device_context->Unmap(buf->m_buffer, 0);
         DEBUG_LOG("Uploaded dynamic_buffer data to gpu buffer: element: %i size: %i", element_size, count);
@@ -1069,14 +1071,13 @@ void InitializeImGui()
 void UpdateSwapchain(const Vec2I& window_size)
 {
     SafeRelease(s_dx11.swap_chain.render_target_view);
-    HRESULT result = s_dx11.swap_chain.handle->ResizeBuffers(
+    HR(s_dx11.swap_chain.handle->ResizeBuffers(
         0,                  //UINT        BufferCount, IS THIS RIGHT???
         (UINT)window_size.x,//UINT        Width,
         (UINT)window_size.y,//UINT        Height,
         DXGI_FORMAT_UNKNOWN,//DXGI_FORMAT_R8G8B8A8_UNORM, //DXGI_FORMAT NewFormat,
         0                   //UINT        SwapChainFlags
-    );
-    assert(SUCCEEDED(result));
+    ));
 
     DXGI_SWAP_CHAIN_DESC desc;
     s_dx11.swap_chain.handle->GetDesc(&desc);
@@ -1090,7 +1091,7 @@ void UpdateSwapchain(const Vec2I& window_size)
 
 
     ID3D11Texture2D* backbuffer;
-    assert(SUCCEEDED(s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer))));
+    VERIFY(SUCCEEDED(s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer))));
     CreateRenderTargetView(&s_dx11.swap_chain.render_target_view, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, backbuffer);
 
     D3D11_TEXTURE2D_DESC backbuffer_desc = {};
@@ -1166,7 +1167,7 @@ void InitializeVideo()
             for (UINT i = 0; factory->EnumAdapters(i, &aOutput) != DXGI_ERROR_NOT_FOUND; i++)
             {
                 DXGI_ADAPTER_DESC desc;
-                HRESULT r = aOutput->GetDesc(&desc);
+                HR(aOutput->GetDesc(&desc));
                 desc.Description;
                 UINT id = desc.VendorId;
             }
@@ -1221,7 +1222,7 @@ void InitializeVideo()
         D3D_FEATURE_LEVEL       feature_level   = {};
         ID3D11DeviceContext*    temp_context    = nullptr;
 
-        HRESULT create_device_and_swap_chain_result = D3D11CreateDeviceAndSwapChain(
+        HR(D3D11CreateDeviceAndSwapChain(
             nullptr,                    //[in, optional]  IDXGIAdapter               *pAdapter,
             D3D_DRIVER_TYPE_HARDWARE,   //                D3D_DRIVER_TYPE            DriverType,
             NULL,                       //                HMODULE                    Software,
@@ -1234,8 +1235,7 @@ void InitializeVideo()
             &s_dx11.device,                    //[out, optional] ID3D11Device               **ppDevice,
             &feature_level,             //[out, optional] D3D_FEATURE_LEVEL          *pFeatureLevel,
             &temp_context               //[out, optional] ID3D11DeviceContext        **ppImmediateContext
-        );
-        assert(SUCCEEDED(create_device_and_swap_chain_result));
+        ));
         assert(s_dx11.device); //FATAL
 
         VERIFY(SUCCEEDED(temp_context->QueryInterface(IID_PPV_ARGS(&s_dx11.device_context))));
@@ -1533,8 +1533,7 @@ void InitializeVideo()
         desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
         // Create depth stencil state
-        HRESULT result = s_dx11.device->CreateDepthStencilState(&desc, &s_dx11.depth_stencil_state_depth);
-        assert(SUCCEEDED(result));
+        HR(s_dx11.device->CreateDepthStencilState(&desc, &s_dx11.depth_stencil_state_depth));
     }
     {
         D3D11_DEPTH_STENCIL_DESC desc;
@@ -1562,8 +1561,7 @@ void InitializeVideo()
         desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
         // Create depth stencil state
-        HRESULT result = s_dx11.device->CreateDepthStencilState(&desc, &s_dx11.depth_stencil_state_no_depth);
-        assert(SUCCEEDED(result));
+        HR(s_dx11.device->CreateDepthStencilState(&desc, &s_dx11.depth_stencil_state_no_depth));
     }
 
     InitializeImGui();
@@ -1910,11 +1908,6 @@ void FinalDraw()
     DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
     DX11Texture* previous_target= reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
     DX11Texture* previous_depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
-
-    //Bindings
-    {
-        g_renderer.structure_voxel_materials->Bind(SLOT_VOXEL_MATERIALS, GpuBuffer::BindLocation::Pixel);
-    }
 
     //Input Assembler
     {

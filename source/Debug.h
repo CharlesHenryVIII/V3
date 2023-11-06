@@ -1,7 +1,5 @@
 #pragma once
-#include "imgui.h"
 #include "WinInterop.h"
-#include "Math.h"
 
 #include <type_traits>
 #include <string>
@@ -10,17 +8,9 @@
 #define V3_CONCAT(a, b) _V3_CONCAT(a, b)
 
 #define REQUIRE_SEMICOLON enum {}
+
 #define FAIL assert(false)
-//#define VERIFY(expr) ((expr) ? true : false, FAIL)
-inline bool foo(bool expr)
-{
-    assert(expr);
-    return expr;
-}
-//#define VERIFY(expr) (!!(foo(expr)))  //bool __FILE__ ## __LINE__ = expr, assert(__FILE ## __LINE__)
 #define VERIFY(expr)        [](bool valid) -> bool { assert(valid); return valid; }(!!(expr))
-//#define VERIFY(expr) (bool V3_CONCAT(_b_,__LINE__) = expr) && (V3_CONCAT(_b_,__LINE__) == assert(V3_CONCAT(_b_,__LINE__)))
-//#define VERIFY(expr) (bool V3_CONCAT(_b_,__LINE__) = expr && (V3_CONCAT(_b_,__LINE__)))
 #define VALIDATE(expr)        { if (!VERIFY(expr)) return;     } REQUIRE_SEMICOLON
 #define VALIDATE_V(expr, __v) { if (!VERIFY(expr)) return __v; } REQUIRE_SEMICOLON
 #define arrsize(arr__) (sizeof(arr__) / sizeof(arr__[0]))

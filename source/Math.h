@@ -1,7 +1,7 @@
 #pragma once
 //#include "SDL\include\SDL_pixels.h"
 #include "gb_math.h"
-//#include "Misc.h"
+#include "Debug.h"
 
 #include <vector>
 #include <cassert>
@@ -22,10 +22,6 @@ using u32 = uint32_t;
 using u64 = uint64_t;
 
 typedef gbVec4<float> Color;
-//union Color {
-//    struct { float r, g, b, a; };
-//    float e[4];
-//};
 
 union ColorInt {
     u32 rgba;
@@ -63,6 +59,7 @@ const Color Mint        = { 0.00f, 1.00f, 0.50f, 1.00f };
 const Color Orange      = { 1.00f, 0.50f, 0.00f, 1.00f };
 const Color Grey        = { 0.50f, 0.50f, 0.50f, 1.00f };
 const Color transCyan   = { 0.60f, 0.60f, 1.00f, 0.50f };
+const Color Yellow      = { 1.00f, 1.00f, 0.00f, 1.00f };
 
 const Color backgroundColor = { 0.263f, 0.706f, 0.965f, 0.0f };
 
@@ -138,6 +135,10 @@ struct Vertex_Cube {
     Color color;
     Vec3 p;
     Vec2 uv;
+};
+struct Vertex_Tetra {
+    Color color;
+    Vec3 p;
 };
 #pragma pack(pop)
 
@@ -237,34 +238,41 @@ struct Rectangle_Int {
     }
 };
 
+MATH_PREFIX Vec4  ToVec4(const Vec3I& a, const int b)
+{ return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z), static_cast<float>(b) }; }
+MATH_PREFIX Vec4  ToVec4(const Vec2I& a, const Vec2I& b)
+{ return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(b.x), static_cast<float>(b.y) }; }
+MATH_PREFIX Vec4  ToVec4(const Vec3& a, const float b)
+{ return { a.x, a.y, a.z, b }; }
+MATH_PREFIX Vec4  ToVec4(const Vec2& a, const Vec2& b)
+{ return { a.x, a.y, b.x, b.y }; }
+MATH_PREFIX Vec3I ToVec3I(const Vec3& a)
+{ return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(a.z) }; }
+MATH_PREFIX Vec3I ToVec3I(const Vec2& a, const float b)
+{ return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(b) }; }
+MATH_PREFIX Vec3I ToVec3I(const Vec2I& a, const int b)
+{ return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(b) }; }
+MATH_PREFIX Vec3  ToVec3(const Vec2& a, float b)
+{ return { static_cast<float>(a.x), static_cast<float>(a.y), b }; }
+MATH_PREFIX Vec3  ToVec3(const Vec3I& a)
+{ return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z) }; }
+MATH_PREFIX Vec2I ToVec2I(const Vec2& a)
+{ return { static_cast<i32>(a.x), static_cast<i32>(a.y) }; }
+MATH_PREFIX Vec2  ToVec2(const Vec2I& a)
+{ return { static_cast<float>(a.x), static_cast<float>(a.y) }; }
+
 template<typename T> inline bool operator> (gbVec2<T> a, gbVec2<T> b) { return (a.x >  b.x) && (a.y >  b.y); }
 template<typename T> inline bool operator>=(gbVec2<T> a, gbVec2<T> b) { return (a.x >= b.x) && (a.y >= b.y); }
-
 template<typename T> inline bool operator< (gbVec2<T> a, gbVec2<T> b) { return (a.x <  b.x) && (a.y <  b.y); }
 template<typename T> inline bool operator<=(gbVec2<T> a, gbVec2<T> b) { return (a.x <= b.x) && (a.y <= b.y); }
-
 template<typename T> inline bool operator> (gbVec3<T> a, gbVec3<T> b) { return (a.x >  b.x) && (a.y >  b.y) && (a.z >  b.z); }
 template<typename T> inline bool operator>=(gbVec3<T> a, gbVec3<T> b) { return (a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z); }
-
 template<typename T> inline bool operator< (gbVec3<T> a, gbVec3<T> b) { return (a.x <  b.x) && (a.y <  b.y) && (a.z <  b.z); }
 template<typename T> inline bool operator<=(gbVec3<T> a, gbVec3<T> b) { return (a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z); }
-
 template<typename T> inline bool operator> (gbVec4<T> a, gbVec4<T> b) { return (a.x >  b.x) && (a.y >  b.y) && (a.z >  b.z) && (a.w >  a.w); }
 template<typename T> inline bool operator>=(gbVec4<T> a, gbVec4<T> b) { return (a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z) && (a.w >= a.w); }
-
 template<typename T> inline bool operator< (gbVec4<T> a, gbVec4<T> b) { return (a.x <  b.x) && (a.y <  b.y) && (a.z <  b.z) && (a.w <  a.w); }
 template<typename T> inline bool operator<=(gbVec4<T> a, gbVec4<T> b) { return (a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z) && (a.w <= a.w); }
-
-
-//inline Vec2 operator-(const Vec2& v)
-//{
-//    return { -v.x, -v.y };
-//}
-//
-//inline Vec2 operator-(const Vec2& lhs, const float rhs)
-//{
-//    return { lhs.x - rhs, lhs.y - rhs };
-//}
 
 
 MATH_PREFIX Vec2I operator*(const Vec2I& a, const float b)
@@ -312,19 +320,19 @@ inline void operator-=(Vec3& a, float b)
 }
 
 template <typename T>
-[[nodiscard]] T Min(const T a, const T b)
+MATH_PREFIX T Min(const T a, const T b)
 {
     return a < b ? a : b;
 }
 
  template <typename T>
-[[nodiscard]] T Max(const T a, const T b)
+MATH_PREFIX T Max(const T a, const T b)
 {
     return a > b ? a : b;
 }
 
 template <typename T>
-[[nodiscard]] T Clamp(const T v, const T min, const T max)
+MATH_PREFIX T Clamp(const T v, const T min, const T max)
 {
     return Max(min, Min(max, v));
 }
@@ -333,12 +341,10 @@ MATH_PREFIX Vec2 Floor(const Vec2& v)
 {
     return { floorf(v.x), floorf(v.y) };
 }
-
 MATH_PREFIX Vec3 Floor(const Vec3& v)
 {
     return { floorf(v.x), floorf(v.y), floorf(v.z) };
 }
-
 MATH_PREFIX Vec4 Floor(const Vec4& v)
 {
     return { floorf(v.x), floorf(v.y), floorf(v.z), floorf(v.w)  };
@@ -348,7 +354,6 @@ MATH_PREFIX Vec3 Trunc(const Vec3& v)
 {
     return { truncf(v.x), truncf(v.y), truncf(v.z) };
 }
-
 MATH_PREFIX Vec4 Trunc(const Vec4& v)
 {
     return { truncf(v.x), truncf(v.y), truncf(v.z), truncf(v.w)  };
@@ -358,7 +363,6 @@ MATH_PREFIX Vec3 Ceiling(const Vec3& v)
 {
     return { ceilf(v.x), ceilf(v.y), ceilf(v.z) };
 }
-
 MATH_PREFIX Vec4 Ceiling(const Vec4& v)
 {
     return { ceilf(v.x), ceilf(v.y), ceilf(v.z), ceilf(v.w)  };
@@ -368,17 +372,14 @@ MATH_PREFIX float Fract(float a)
 {
     return a - floorf(a);
 }
-
 MATH_PREFIX Vec2 Fract(const Vec2& a)
 {
     return a - Floor(a);
 }
-
 MATH_PREFIX Vec3 Fract(const Vec3& a)
 {
     return a - Floor(a);
 }
-
 MATH_PREFIX Vec4 Fract(const Vec4& a)
 {
     return a - Floor(a);
@@ -410,7 +411,6 @@ MATH_PREFIX Vec2 Sine(const Vec2& v)
     Vec2 r = { sinf(v.x), sinf(v.y) };
     return r;
 }
-
 MATH_PREFIX Vec3 Sine(const Vec3& v)
 {
     Vec3 r = { sinf(v.x), sinf(v.y), sinf(v.z) };
@@ -448,18 +448,22 @@ MATH_PREFIX Vec2 NormalizeZero(const Vec2& v)
     Vec2 result = { (v.x / hyp), (v.y / hyp) };
     return result;
 }
-MATH_PREFIX Vec3 Normalize(const Vec3& v)
+template<typename T>
+MATH_PREFIX gbVec2<T> Normalize(const gbVec2<T>& v)
 {
-    float hyp = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-    Vec3 result = { (v.x / hyp), (v.y / hyp) , (v.z / hyp)};
-    return result;
+    return gb_vec2_norm(v);
 }
-MATH_PREFIX Vec2 Normalize(const Vec2& v)
+template<typename T>
+MATH_PREFIX gbVec3<T> Normalize(const gbVec3<T>& v)
 {
-    float hyp = sqrtf((v.x * v.x) + (v.y * v.y));
-    return { (v.x / hyp), (v.y / hyp) };
+    return gb_vec3_norm(v);
 }
-inline float* Normalize(float* v, size_t length)
+template<typename T>
+MATH_PREFIX gbVec4<T> Normalize(const gbVec4<T>& v)
+{
+    return gb_vec4_norm(v);
+}
+MATH_PREFIX float* Normalize(float* v, size_t length)
 {
     float total = 0;
     for (i32 i = 0; i < length; i++)
@@ -473,7 +477,7 @@ inline float* Normalize(float* v, size_t length)
     }
     return v;
 }
-inline double* Normalize(double* v, size_t length)
+MATH_PREFIX double* Normalize(double* v, size_t length)
 {
     double total = 0;
     for (i32 i = 0; i < length; i++)
@@ -505,7 +509,7 @@ MATH_PREFIX Vec3 Converge(const Vec3& value, const Vec3& target, float rate, flo
 }
 
 #if 1
-float Bilinear(float p00, float p10, float p01, float p11, float x, float y);
+[[nodiscard]] float Bilinear(float p00, float p10, float p01, float p11, float x, float y);
 #else
 [[nodiscard]] float Bilinear(Vec2 p, Rect loc, float bl, float br, float tl, float tr);
 #endif
@@ -526,82 +530,82 @@ Atan2f return value:
 -3pi/4    -pi/2        pi/4
 */
 
-MATH_PREFIX float DotProduct(const Vec2& a, const Vec2& b)
+template<typename T>
+MATH_PREFIX T DotProduct(const gbVec2<T>& a, const gbVec2<T>& b)
 {
-    float r = a.x * b.x + a.y * b.y;
-    return r;
+    return a.x * b.x + a.y * b.y;
 }
-MATH_PREFIX float DotProduct(const Vec3& a, const Vec3& b)
+template<typename T>
+MATH_PREFIX T DotProduct(const gbVec3<T>& a, const gbVec3<T>& b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
-MATH_PREFIX Vec3 CrossProduct(const Vec3& a, const Vec3& b)
+template<typename T>
+MATH_PREFIX gbVec3<T> CrossProduct(const gbVec3<T>& a, const gbVec3<T>& b)
 {
     return gb_vec3_cross(a, b);
 }
-MATH_PREFIX float CrossProduct(const Vec2& a, const Vec2& b)
+template<typename T>
+MATH_PREFIX T CrossProduct(const gbVec2<T>& a, const gbVec2<T>& b)
 {
     return gb_vec2_cross(a, b);
 }
 
-MATH_PREFIX float Pythags(const Vec2& a)
+template<typename T>
+MATH_PREFIX T PythagsInner(const gbVec2<T>& a)
 {
-    return sqrtf((a.x * a.x) + (a.y * a.y));
+    return (a.x * a.x) + (a.y * a.y);
 }
-MATH_PREFIX float Pythags(const Vec3& a)
+template<typename T>
+MATH_PREFIX T PythagsInner(const gbVec3<T>& a)
 {
-    return sqrtf((a.x * a.x) + (a.y * a.y) + (a.z * a.z));
+    return (a.x * a.x) + (a.y * a.y) + (a.z * a.z);
 }
-MATH_PREFIX float Pythags(const Vec2I& a)
+template<typename T>
+MATH_PREFIX T Pythags(const gbVec2<T>& a)
 {
-    return Pythags(Vec2({ float(a.x), float(a.y) }));
+    return sqrtf(PythagsInner(a));
 }
-MATH_PREFIX float Pythags(const Vec3I& a)
+template<typename T>
+MATH_PREFIX T Pythags(const gbVec3<T>& a)
 {
-    return Pythags(Vec3({ float(a.x), float(a.y), float(a.z) }));
+    return sqrtf(PythagsInner(a));
 }
 
 MATH_PREFIX float Distance(const Vec2& a, const Vec2& b)
 {
     return Pythags(a - b);
 }
-MATH_PREFIX double DistanceD(const Vec2& a, const Vec2& b)
+MATH_PREFIX double Distance(const Vec2I& a, const Vec2I& b)
+{
+    return Pythags(ToVec2(a - b));
+}
+MATH_PREFIX float Distance(const Vec3& a, const Vec3& b)
 {
     return Pythags(a - b);
 }
 MATH_PREFIX double Distance(const Vec3I& a, const Vec3I& b)
 {
-    return Pythags(a - b);
-}
-MATH_PREFIX double Distance(const Vec2I& a, const Vec2I& b)
-{
-    return Pythags(a - b);
-}
-MATH_PREFIX float Distance(const Vec3& a, const Vec3& b)
-{
-    return Pythags(a - b);
+    return Pythags(ToVec3(a - b));
 }
 
 MATH_PREFIX float Length(const Vec2& a)
 {
     return Pythags(a);
 }
-MATH_PREFIX double LengthD(const Vec2& a)
+MATH_PREFIX float Length(const Vec2I& a)
 {
-    return Pythags(a);
-}
-MATH_PREFIX double Length(const Vec3I& a)
-{
-    return Pythags(a);
-}
-MATH_PREFIX double Length(const Vec2I& a)
-{
-    return Pythags(a);
+    return Pythags(ToVec2(a));
 }
 MATH_PREFIX float Length(const Vec3& a)
 {
     return Pythags(a);
 }
+MATH_PREFIX float Length(const Vec3I& a)
+{
+    return Pythags(ToVec3(a));
+}
+
 MATH_PREFIX Vec3 Acos(const Vec3& a)
 {
     return { acos(a.x), acos(a.y), acos(a.z) };
@@ -648,31 +652,6 @@ MATH_PREFIX float RandomFloat(const float min, const float max)
     return min + (max - min) * (rand() / float(RAND_MAX));
 }
 
-MATH_PREFIX Vec3I ToVec3I(const Vec3& a)
-{
-    return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(a.z) };
-}
-MATH_PREFIX Vec3I ToVec3I(const Vec2& a, const float b)
-{
-    return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(b) };
-}
-MATH_PREFIX Vec3I ToVec3I(const Vec2I& a, const int b)
-{
-    return { static_cast<i32>(a.x), static_cast<i32>(a.y), static_cast<i32>(b) };
-}
-MATH_PREFIX Vec3  ToVec3(const Vec3I& a)
-{
-    return { static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z) };
-}
-MATH_PREFIX Vec2I ToVec2I(const Vec2& a)
-{
-    return { static_cast<i32>(a.x), static_cast<i32>(a.y) };
-}
-MATH_PREFIX Vec2  ToVec2(const Vec2I& a)
-{
-    return { static_cast<float>(a.x), static_cast<float>(a.y) };
-}
-
 //Multiplication of two vectors without adding each dimension to get the dot product
 MATH_PREFIX Vec3I HadamardProduct(const Vec3I& a, const Vec3I& b)
 {
@@ -682,6 +661,97 @@ MATH_PREFIX Vec3I HadamardProduct(const Vec3I& a, const Vec3I& b)
 MATH_PREFIX Vec3 HadamardProduct(const Vec3& a, const Vec3& b)
 {
     return { a.x * b.x, a.y * b.y, a.z * b.z };
+}
+
+template<typename T>
+MATH_PREFIX gbVec3<T> Orthogonal(gbVec3<T> v)
+{
+    static_assert(sizeof(T) == 4);
+    T x = fabsf(v.x);
+    T y = fabsf(v.y);
+    T z = fabsf(v.z);
+
+    // Cross products work best when vectors are not colinear
+    // so we should be selecting the 'other' vector that is most different
+    // from the input vector.
+    // Therefore if abs(x) is the smallest component then we are fine multiplying
+    // with either oy or the ox vectors?
+    gbVec3<T> ox = gbVec3<T>(1, 0, 0);
+    gbVec3<T> oy = gbVec3<T>(0, 1, 0);
+    gbVec3<T> oz = gbVec3<T>(0, 0, 1);
+    gbVec3<T> other = x < y ? (x < z ? ox : oz) : (y < z ? oy : oz);
+    other = CrossProduct(v, other);
+    return other;
+}
+
+//rotation from u to v
+template<typename T>
+MATH_PREFIX gbQuat<T> RotationBetween(gbVec3<T> u, gbVec3<T> v)
+{
+    if (u == v || u == gbVec3<T>() || v == gbVec3<T>())
+    {
+        return gb_quat_identity<T>();
+    }
+
+    // It is important that the inputs are of equal length when
+    // calculating the half-way vector.
+    u = Normalize(u);
+    v = Normalize(v);
+
+    // Unfortunately, we have to check for when u == -v, as u + v
+    // in this case will be (0, 0, 0), which cannot be normalized.
+    if (u == -v)
+    {
+        // 180 degree rotation around any orthogonal vector
+        u = Normalize(Orthogonal(u));
+
+        gbQuat<T> q;
+        q.xyz = u;
+        q.w = 0;
+        return q;
+    }
+
+    gbVec3<T> half = Normalize(u + v);
+    gbVec3<T> cross = CrossProduct(u, half);
+
+    gbQuat<T> result;
+    result.xyz = cross;
+    result.w = DotProduct(u, half);
+    return result;
+}
+
+template<typename T>
+MATH_PREFIX gbVec3<T> Vec3Forward()
+{
+    return { 0, 0, 1 };
+}
+
+template<typename T>
+MATH_PREFIX gbQuat<T> RotationFromForward(const gbVec3<T>& v)
+{
+    return RotationBetween<T>(Vec3Forward<T>(), v);
+}
+
+template<typename T>
+MATH_PREFIX gbQuat<T> OrientationForDirectionAndUp(const gbVec3<T>& forward, const gbVec3<T>& up)
+{
+    gbQuat<T> result = gb_quat_identity<T>();
+    VALIDATE_V(PythagsInner<T>(forward)    > 0, result);
+    VALIDATE_V(PythagsInner<T>(up)         > 0, result);
+    if (Abs(DotProduct(forward, up)) > 0.95)
+    {
+        return RotationFromForward<T>(forward);
+    }
+    else
+    {
+        gbMat4<T> s = {};
+        gbVec3<T> right = CrossProduct<T>(forward, up);
+        s.col[0].xyz = right;
+        s.col[1].xyz = CrossProduct<T>(forward, right);
+        s.col[2].xyz = forward;
+        gbQuat<T> mat_version = gb_quat_from_mat4<T>(s);
+        return mat_version;
+    }
 }
 
 struct Plane
@@ -719,39 +789,6 @@ struct VertexFace {
 
     Vec3 e[4];
 };
-
-//static const Vec3 cubeVertices[] = {
-//    // +x
-//    gb_vec3(1.0f, 1.0f, 1.0f),
-//    gb_vec3(1.0f, 0.0f, 1.0f),
-//    gb_vec3(1.0f, 1.0f, 0.0f),
-//    gb_vec3(1.0f, 0.0f, 0.0f),
-//    // -x
-//    gb_vec3(0.0f, 1.0f, 0.0f),
-//    gb_vec3(0.0f, 0.0f, 0.0f),
-//    gb_vec3(0.0f, 1.0f, 1.0f),
-//    gb_vec3(0.0f, 0.0f, 1.0f),
-//    // +y
-//    gb_vec3(1.0f, 1.0f, 1.0f),
-//    gb_vec3(1.0f, 1.0f, 0.0f),
-//    gb_vec3(0.0f, 1.0f, 1.0f),
-//    gb_vec3(0.0f, 1.0f, 0.0f),
-//    // -y
-//    gb_vec3(0.0f, 0.0f, 1.0f),
-//    gb_vec3(0.0f, 0.0f, 0.0f),
-//    gb_vec3(1.0f, 0.0f, 1.0f),
-//    gb_vec3(1.0f, 0.0f, 0.0f),
-//    // z
-//    gb_vec3(0.0f, 1.0f, 1.0f),
-//    gb_vec3(0.0f, 0.0f, 1.0f),
-//    gb_vec3(1.0f, 1.0f, 1.0f),
-//    gb_vec3(1.0f, 0.0f, 1.0f),
-//    // -z
-//    gb_vec3(1.0f, 1.0f, 0.0f),
-//    gb_vec3(1.0f, 0.0f, 0.0f),
-//    gb_vec3(0.0f, 1.0f, 0.0f),
-//    gb_vec3(0.0f, 0.0f, 0.0f),
-//};
 
 const VertexFace vertex_cube_indexed[6] = {
     // +x

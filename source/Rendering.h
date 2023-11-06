@@ -1,7 +1,7 @@
 #pragma once
 #include "SDL.h"
 #include "Math.h"
-#include "Misc.h"
+#include "Debug.h"
 //#include "Rendering_Texture.h"
 #include "Vox.h"
 #include "GpuSharedData.h"
@@ -95,7 +95,7 @@ void DeleteTexture(Texture** texture);
 
 
 //************
-//Shader
+//GpuBuffer
 //************
 
 struct GpuBuffer
@@ -144,26 +144,27 @@ void DeleteBuffer(GpuBuffer** buffer);
 //Shader
 //************
 
-struct ShaderProgram
+struct Shader
 {
-    enum ShaderType : u32 {
+    enum Type : u32 {
         Type_Invalid,
         Type_Vertex,
         Type_Pixel,
         Type_Count,
     };
-    ENUMOPS(ShaderType);
+    ENUMOPS(Type);
 
-    enum ShaderIndex : u32 {
+    enum Index : u32 {
         Index_Invalid,
         Index_Main,
         Index_Voxel_Rast,
         Index_Voxel,
         Index_Cube,
+        Index_Tetra,
         Index_Final_Draw,
         Index_Count,
     };
-    ENUMOPS(ShaderIndex);
+    ENUMOPS(Index);
 
     struct InputElementDesc {
         const char* SemanticName;
@@ -173,7 +174,7 @@ struct ShaderProgram
 
     static const u32 m_vertex_component_max = 4;
 
-    ~ShaderProgram();
+    ~Shader();
     void CheckForUpdate();
 
     std::string m_vertexFile;
@@ -184,14 +185,14 @@ struct ShaderProgram
     std::vector<std::string> m_reference_file_names;
     std::vector<u64> m_reference_file_times;
 
-    bool CompileShader(std::string text, const std::string& file_name, ShaderType shader_type);
+    bool CompileShader(std::string text, const std::string& file_name, Shader::Type shader_type);
 };
-bool CreateShader(ShaderProgram** shader,
+bool CreateShader(Shader** shader,
     const std::string& vertexFileLocation,
     const std::string& pixelFileLocation,
-    ShaderProgram::InputElementDesc* input_layout,
+    Shader::InputElementDesc* input_layout,
     i32 layout_count);
-inline bool CreateShader(ShaderProgram** s, const std::string& shader_file_location, ShaderProgram::InputElementDesc* input_layout, i32 layout_count)
+inline bool CreateShader(Shader** s, const std::string& shader_file_location, Shader::InputElementDesc* input_layout, i32 layout_count)
 {
     return CreateShader(s, shader_file_location, shader_file_location, input_layout, layout_count);
 }
@@ -209,7 +210,8 @@ struct Renderer {
     GpuBuffer* voxel_rast_vb    = nullptr;
     GpuBuffer* voxel_vb         = nullptr;
     GpuBuffer* box_vb           = nullptr;//Does not need index buffer
-    GpuBuffer* cube_vb          = nullptr;//Uses quad_ib
+    GpuBuffer* cube_vb          = nullptr;
+    GpuBuffer* tetra_vb         = nullptr;
     GpuBuffer* cb_common        = nullptr;
     GpuBuffer* structure_voxel_materials= nullptr;
     GpuBuffer* structure_voxel_indices  = nullptr;
@@ -222,7 +224,7 @@ struct Renderer {
     Vec2I size;
     Vec2I pos;
     u32   refresh_rate;
-    ShaderProgram*  shaders[+ShaderProgram::Index_Count] = {};
+    Shader*  shaders[+Shader::Index_Count] = {};
     Texture*        textures[Texture::Index_Count] = {};
 
     enum SwapInterval_ {
@@ -240,9 +242,7 @@ void RenderPresent();
 void DrawPathTracedVoxels();
         void AddCubeToRender(Vec3 p, Color color, Vec3  scale, bool wireframe);
 inline  void AddCubeToRender(Vec3 p, Color color, float scale, bool wireframe) { AddCubeToRender(p, color, { scale, scale, scale }, wireframe); }
-void RenderTransparentCubes();
-void RenderOpaqueCubes();
-void RenderWireframeCubes();
+void RenderPrimitives();
 void FinalDraw();
 
 

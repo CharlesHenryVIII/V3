@@ -1,5 +1,5 @@
 #include "Rendering.h"
-#include "Misc.h"
+#include "Debug.h"
 #include "WinInterop_File.h"
 #include "Vox.h"
 #include "imgui.h"
@@ -653,7 +653,7 @@ struct DX11IncludeManager : ID3DInclude
 };
 
 
-struct DX11Shader : public ShaderProgram
+struct DX11Shader : public Shader
 {
     //D3D11_USAGE m_usage = D3D11_USAGE_DYNAMIC;
     ID3D11Buffer* m_buffer = nullptr;
@@ -667,10 +667,10 @@ struct DX11Shader : public ShaderProgram
     //D3D11_BIND_FLAG m_target = {};
 };
 
-bool CreateShader(ShaderProgram** s,
+bool CreateShader(Shader** s,
     const std::string& vertexFileLocation,
     const std::string& pixelFileLocation,
-    ShaderProgram::InputElementDesc* input_layout,
+    Shader::InputElementDesc* input_layout,
     i32 layout_count)
 {
     assert(s);
@@ -699,7 +699,7 @@ bool CreateShader(ShaderProgram** s,
     shader->CheckForUpdate();
     return true;
 }
-ShaderProgram::~ShaderProgram()
+Shader::~Shader()
 {
     DX11Shader* shader = reinterpret_cast<DX11Shader*>(this);
     SafeRelease(shader->m_vertex_shader);
@@ -707,7 +707,7 @@ ShaderProgram::~ShaderProgram()
     SafeRelease(shader->m_vertex_input_layout);
     DEBUG_LOG("Shader Program Deleted\n");
 }
-bool ShaderProgram::CompileShader(std::string text, const std::string& file_name, ShaderType shader_type)
+bool Shader::CompileShader(std::string text, const std::string& file_name, Type shader_type)
 {
     DX11Shader* shader = reinterpret_cast<DX11Shader*>(this);
     bool failed = false;
@@ -885,7 +885,7 @@ bool ShaderProgram::CompileShader(std::string text, const std::string& file_name
     return true;
 }
 
-void GetShaderReferenceFileTimes(std::vector<u64>& out, ShaderProgram* p)
+void GetShaderReferenceFileTimes(std::vector<u64>& out, Shader* p)
 {
     out.resize(p->m_reference_file_times.size(), 0);
 
@@ -899,7 +899,7 @@ void GetShaderReferenceFileTimes(std::vector<u64>& out, ShaderProgram* p)
     }
 }
 
-void ShaderProgram::CheckForUpdate()
+void Shader::CheckForUpdate()
 {
     std::string vertexText;
     u64 vertexFileTime;
@@ -1327,7 +1327,7 @@ void InitializeVideo()
     //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT,   0, (UINT)offsetof(Vertex, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
     //        { "UV",         0, DXGI_FORMAT_R32G32_FLOAT,      0, (UINT)offsetof(Vertex, uv),  D3D11_INPUT_PER_VERTEX_DATA, 0 },
     //        { "NORMAL",     0, DXGI_FORMAT_R32G32B32_FLOAT,   0, (UINT)offsetof(Vertex, n),   D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
-    //    g_renderer.shaders[+Shader::Main] = new ShaderProgram("Source/Shaders/Main.vert", "Source/Shaders/Main.frag", layout, arrsize(layout));
+    //    g_renderer.shaders[+Shader::Main] = new Shader("Source/Shaders/Main.vert", "Source/Shaders/Main.frag", layout, arrsize(layout));
     //}
     //{
     //    D3D11_INPUT_ELEMENT_DESC layout[] = {
@@ -1335,34 +1335,35 @@ void InitializeVideo()
     //        { "COLOR",      0, DXGI_FORMAT_R32_UINT,        0, (UINT)offsetof(Vertex_Voxel, rgba),D3D11_INPUT_PER_VERTEX_DATA, 0 },
     //        { "NORMAL",     0, DXGI_FORMAT_R8_UINT,         0, (UINT)offsetof(Vertex_Voxel, n),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
     //        { "AO",         0, DXGI_FORMAT_R8_UINT,         0, (UINT)offsetof(Vertex_Voxel, ao),  D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
-    //    g_renderer.shaders[+Shader::Voxel_Rast] = new ShaderProgram("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag", layout, arrsize(layout));
+    //    g_renderer.shaders[+Shader::Voxel_Rast] = new Shader("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag", layout, arrsize(layout));
     //}
     {
         //D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 } };
-        ShaderProgram::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
-        VERIFY(CreateShader(&g_renderer.shaders[+ShaderProgram::Index_Voxel],   "Source/Shaders/Voxel.hlsl",    layout, arrsize(layout)));
+        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Voxel],   "Source/Shaders/Voxel.hlsl",    layout, arrsize(layout)));
     }
     {
-        ShaderProgram::InputElementDesc layout[] = {
+        Shader::InputElementDesc layout[] = {
             { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Cube, color)    },
             { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Cube, p)        },
             { "TEXCOORD",   DXGI_FORMAT_R32G32_FLOAT,       offsetof(Vertex_Cube, uv)       } };
-        VERIFY(CreateShader(&g_renderer.shaders[+ShaderProgram::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
     }
     {
-        ShaderProgram::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
-        VERIFY(CreateShader(&g_renderer.shaders[+ShaderProgram::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
+        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
     }
     //{
     //    D3D11_INPUT_ELEMENT_DESC layout[] = {
     //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
     //        { "COLOR",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, color),D3D11_INPUT_PER_VERTEX_DATA, 0 } };
-    //    g_renderer.shaders[+Shader::Cube] = new ShaderProgram("Source/Shaders/Cube.vert", "Source/Shaders/Cube.frag", layout, arrsize(layout));
+    //    g_renderer.shaders[+Shader::Cube] = new Shader("Source/Shaders/Cube.vert", "Source/Shaders/Cube.frag", layout, arrsize(layout));
     //}
 
     //Create Buffers:
     CreateGpuBuffer(&g_renderer.quad_ib,        "Quad_IB",          true,   GpuBuffer::Type::Index);
     FillIndexBuffer(g_renderer.quad_ib, 6 * 4);
+    CreateGpuBuffer(&g_renderer.tetra_vb,       "Tetra_VB",         false,  GpuBuffer::Type::Vertex);
     //CreateGpuBuffer(&g_renderer.voxel_rast_vb,  "Voxel_Rast_VB",    true,   GpuBuffer::Type::Vertex);
     //CreateGpuBuffer(&g_renderer.box_vb,         "Box_VB",           false,  GpuBuffer::Type::Vertex);
     CreateGpuBuffer(&g_renderer.cube_vb,        "Cube_VB",          false,  GpuBuffer::Type::Vertex);
@@ -1614,7 +1615,7 @@ void RenderUpdate(Vec2I window_size, float deltaTime)
 
     if (s_last_shader_update_time + 0.1f <= s_incremental_time)
     {
-        for (ShaderProgram* s : g_renderer.shaders)
+        for (Shader* s : g_renderer.shaders)
         {
             if (s)
                 s->CheckForUpdate();
@@ -1821,7 +1822,7 @@ void RenderPresent()
 void DrawPathTracedVoxels()
 {
     ID3D11DeviceContext* context = s_dx11.device_context;
-    DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+ShaderProgram::Index_Voxel]);
+    DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Voxel]);
     DX11Texture* voxel_indices  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices]);
     DX11Texture* random         = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Random]);
     DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
@@ -1904,7 +1905,7 @@ void DrawPathTracedVoxels()
 void FinalDraw()
 {
     ID3D11DeviceContext* context = s_dx11.device_context;
-    DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+ShaderProgram::Index_Final_Draw]);
+    DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Final_Draw]);
     DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
     DX11Texture* previous_target= reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
     DX11Texture* previous_depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
@@ -1980,55 +1981,33 @@ void FinalDraw()
 }
 
 
+
+
 //**********************
-// Add Cubes To Render
+// Primitives Render
 //**********************
-std::vector<Vertex_Cube> s_cubesToDraw_transparent;
-std::vector<Vertex_Cube> s_cubesToDraw_opaque;
-std::vector<Vertex_Cube> s_cubesToDraw_wireframe;
 
-void AddCubeToRender(Vec3 p, Color color, Vec3  scale, bool wireframe)
+template<typename T>
+void RenderPrimitiveInternal(
+    std::vector<T>& verts_to_draw, 
+    ID3D11RasterizerState* rasterizer, 
+    Texture::Index texture_i,
+    Shader::Index shader_i,
+    GpuBuffer* vertex_buffer)
 {
-    assert(Abs(scale) == scale);
-    Vertex_Cube c;
-
-    auto* list = &s_cubesToDraw_opaque;
-    if (wireframe)
-    {
-        list = &s_cubesToDraw_wireframe;
-    }
-    else if (color.a != 1.0f)
-    {
-        list = &s_cubesToDraw_transparent;
-    }
-
-    for (i32 f = 0; f < +Face::Count; f++)
-        for (i32 v = 0; v < 6; v++)
-        {
-            c.p = p + HadamardProduct(vertices_cube_full[f * 6 + v].p, scale);
-            c.color = color;
-            c.uv = uv_coordinates_full[v];
-            list->push_back(c);
-        }
-}
-
-void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11RasterizerState* rasterizer, DX11Texture* texture)
-{
-#if 1
-    if (cubes_to_draw.size() == 0)
+    if (verts_to_draw.size() == 0)
         return;
 
     ID3D11DeviceContext* context= s_dx11.device_context;
-    DX11Shader*     shader      = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+ShaderProgram::Index_Cube]);
-    DX11GpuBuffer*  vb          = reinterpret_cast<DX11GpuBuffer*>(g_renderer.cube_vb);
-    DX11GpuBuffer*  ib          = reinterpret_cast<DX11GpuBuffer*>(g_renderer.quad_ib);
-    DX11Texture* depth          = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
-    DX11Texture* target         = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
+    DX11Shader* shader      = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+shader_i]);
+    DX11Texture* texture    = reinterpret_cast<DX11Texture*>(g_renderer.textures[+texture_i]);
+    DX11GpuBuffer* vb       = reinterpret_cast<DX11GpuBuffer*>(vertex_buffer);
+    DX11Texture* depth      = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
+    DX11Texture* target     = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
 
     {
         ZoneScopedN("Upload");
-        FillIndexBuffer(ib, 6 * cubes_to_draw.size());
-        vb->Upload(cubes_to_draw);
+        vb->Upload(verts_to_draw);
     }
 
     //Bindings
@@ -2037,10 +2016,9 @@ void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11Rasteriz
     //Input Assembler
     {
         context->IASetInputLayout(shader->m_vertex_input_layout);
-        UINT strides[] = { sizeof(Vertex_Cube), };
+        UINT strides[] = { sizeof(T), };
         UINT offsets[] = { 0, };
         context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
-        context->IASetIndexBuffer(ib->m_buffer, DXGI_FORMAT_R32_UINT, 0);
         context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     }
 
@@ -2078,8 +2056,8 @@ void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11Rasteriz
     //Pixel Shader
     {
         context->PSSetShader(shader->m_pixel_shader, NULL, 0);
-        context->PSSetSamplers(SLOT_CUBE_TEXTURE_SAMPLER,  1, &texture->m_sampler);
-        context->PSSetShaderResources(SLOT_CUBE_TEXTURE,   1, &texture->m_view);
+        context->PSSetSamplers(SLOT_PRIMITIVE_TEXTURE_SAMPLER,  1, &texture->m_sampler);
+        context->PSSetShaderResources(SLOT_PRIMITIVE_TEXTURE,   1, &texture->m_view);
     }
 
     //Output Merger
@@ -2098,29 +2076,129 @@ void RenderCubesInternal(std::vector<Vertex_Cube>& cubes_to_draw, ID3D11Rasteriz
     {
         const size_t indices_per_face = 6;
         const size_t faces_per_cube = 6;
-        const UINT total_indices_to_draw = UINT(cubes_to_draw.size() * indices_per_face * faces_per_cube);
-        //context->DrawIndexed(UINT((cubes_to_draw.size() / 24) * 36), 0, 0);
-        context->Draw(UINT(cubes_to_draw.size()), 0);
+        const UINT total_indices_to_draw = UINT(verts_to_draw.size() * indices_per_face * faces_per_cube);
+        //context->DrawIndexed(UINT((verts_to_draw.size() / 24) * 36), 0, 0);
+        context->Draw(UINT(verts_to_draw.size()), 0);
     }
-#endif
-    cubes_to_draw.clear();
-}
-void RenderTransparentCubes()
-{
-    ZoneScopedN("Upload and Render Transparent Cubes");
-    RenderCubesInternal(s_cubesToDraw_transparent, s_dx11.rasterizer_full, reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Plain]));
+    verts_to_draw.clear();
 }
 
-void RenderOpaqueCubes()
+
+
+
+//**********************
+// Add Cubes To Render
+//**********************
+std::vector<Vertex_Cube> s_cubesToDraw_transparent;
+std::vector<Vertex_Cube> s_cubesToDraw_opaque;
+std::vector<Vertex_Cube> s_cubesToDraw_wireframe;
+
+
+void AddCubeToRender(Vec3 p, Color color, Vec3  scale, bool wireframe)
 {
-    ZoneScopedN("Upload and Render Opaque Cubes");
-    RenderCubesInternal(s_cubesToDraw_opaque, s_dx11.rasterizer_full, reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Minecraft]));
+    assert(Abs(scale) == scale);
+    Vertex_Cube c;
+
+    auto* list = &s_cubesToDraw_opaque;
+    if (wireframe)
+    {
+        list = &s_cubesToDraw_wireframe;
+    }
+    else if (color.a != 1.0f)
+    {
+        list = &s_cubesToDraw_transparent;
+    }
+
+    for (i32 f = 0; f < +Face::Count; f++)
+        for (i32 v = 0; v < 6; v++)
+        {
+            c.p = p + HadamardProduct(vertices_cube_full[f * 6 + v].p, scale);
+            c.color = color;
+            c.uv = uv_coordinates_full[v];
+            list->push_back(c);
+        }
 }
 
-void RenderWireframeCubes()
+
+
+
+
+
+
+//**********************
+// Add Tetrahedron To Render
+//**********************
+
+#define TETRA_TIP   { +0.0f, +0.5f, +0.0f }
+#define TETRA_TOP   { +0.0f, -0.5f, +0.5f }
+#define TETRA_LEFT  { -0.5f, -0.5f, -0.5f }
+#define TETRA_RIGHT { +0.5f, -0.5f, -0.5f }
+const Vec3 tetrahedron_positions[] = {
+    TETRA_LEFT, //bottom
+    TETRA_RIGHT,
+    TETRA_TOP,
+
+    TETRA_LEFT, //z
+    TETRA_TOP,
+    TETRA_TIP,
+
+    TETRA_RIGHT,//x
+    TETRA_LEFT,
+    TETRA_TIP,
+
+    TETRA_TOP,  //xz
+    TETRA_RIGHT,
+    TETRA_TIP,
+};
+#undef TETRA_TIP
+#undef TETRA_TOP
+#undef TETRA_LEFT
+#undef TETRA_RIGHT
+
+std::vector<Vertex_Tetra> s_tetrasToDraw_transparent;
+std::vector<Vertex_Tetra> s_tetrasToDraw_opaque;
+std::vector<Vertex_Tetra> s_tetrasToDraw_wireframe;
+
+void AddTetrahedronToRender(const Vec3& p, const Vec3& dir, Color color, Vec3  scale, bool wireframe)
 {
-    ZoneScopedN("Upload and Render Wireframe Cubes");
-    RenderCubesInternal(s_cubesToDraw_wireframe, s_dx11.rasterizer_wireframe, reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Plain]));
+    assert(Abs(scale) == scale);
+    assert(dir.x != 0 || dir.y != 0 || dir.z != 0);
+
+
+    auto* list = &s_tetrasToDraw_opaque;
+    if (wireframe)
+    {
+        list = &s_tetrasToDraw_wireframe;
+    }
+    else if (color.a != 1.0f)
+    {
+        list = &s_tetrasToDraw_transparent;
+    }
+
+    Quat rotate_to_correct_forward = gb_quat_axis_angle({ -1, 0, 0 }, -tau / 4);
+    Quat rot = OrientationForDirectionAndUp(Normalize(dir), { 0, 1, 0 });
+    Vertex_Tetra v;
+    for (i32 i = 0; i < arrsize(tetrahedron_positions); i++)
+    {
+        Vec3 scaled = HadamardProduct(tetrahedron_positions[i], scale);
+        Vec3 forward_aligned = gb_quat_rotate_vec3(rotate_to_correct_forward, scaled);
+        Vec3 rotated = gb_quat_rotate_vec3(rot, forward_aligned);
+        v.p = p + rotated;
+        v.color = color;
+        list->push_back(v);
+    }
+}
+
+void RenderPrimitives()
+{
+    ZoneScopedN("Render Primitives");
+    g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
+    RenderPrimitiveInternal(s_tetrasToDraw_opaque,      s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    RenderPrimitiveInternal(s_cubesToDraw_opaque,       s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    RenderPrimitiveInternal(s_tetrasToDraw_transparent, s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    RenderPrimitiveInternal(s_cubesToDraw_transparent,  s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    RenderPrimitiveInternal(s_tetrasToDraw_wireframe,   s_dx11.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    RenderPrimitiveInternal(s_cubesToDraw_wireframe,    s_dx11.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
 }
 
 const SDL_MessageBoxColorScheme colorScheme = {

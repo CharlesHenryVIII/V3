@@ -9,7 +9,8 @@
 #include "stb/stb_image.h"
 
 #include "Math.h"
-#include "Misc.h"
+#include "Debug.h"
+#include "Timers.h"
 #include "Rendering.h"
 #include "Input.h"
 #include "WinInterop_File.h"
@@ -18,7 +19,6 @@
 
 #include <unordered_map>
 #include <vector>
-//#include <algorithm>
 
 #define RASTERIZED_RENDERING 0
 
@@ -375,9 +375,18 @@ int main(int argc, char* argv[])
                 Vec3 voxel_size = ToVec3(voxels.size);
                 AddCubeToRender(voxel_size / 2.0f, Orange, voxel_size, true);
             }
-            AddCubeToRender({}, White, 5, false);
 
             RaycastResult voxel_hit_result = voxel_rays[0];
+
+            {
+                float scale = 0.5;
+                float scale_half = scale * 0.5f;
+                float scale_double = scale * 2;
+                AddCubeToRender({},              White, scale, false);
+                AddCubeToRender({ scale, 0, 0 }, Red,   { scale_double, scale_half,     scale_half   }, false);
+                AddCubeToRender({ 0, scale, 0 }, Green, { scale_half,   scale_double,   scale_half   }, false);
+                AddCubeToRender({ 0, 0, scale }, Blue,  { scale_half,   scale_half,     scale_double }, false);
+            }
 
 #endif
 
@@ -494,9 +503,7 @@ int main(int argc, char* argv[])
             {
                 ZoneScopedN("Cube Render");
                 g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
-                RenderOpaqueCubes();
-                RenderTransparentCubes();
-                RenderWireframeCubes();
+                RenderPrimitives();
             }
             {
                 ZoneScopedN("Final Draw");

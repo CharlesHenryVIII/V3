@@ -1,6 +1,6 @@
 #pragma once
 #include "Math.h"
-#include "Misc.h"
+#include "Debug.h"
 #include "GpuSharedData.h"
 
 #include <string>

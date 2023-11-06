@@ -1,5 +1,6 @@
 #include "WinInterop.h"
-#include "Misc.h"
+#include "Debug.h"
+#include "Math.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -108,7 +109,7 @@ void SetThreadName(std::thread::native_handle_type threadID, std::string name)
     SetThreadName(GetThreadId(threadID), name.c_str());
 }
 
-void Sleep_Thread(i64 milliseconds)
+void Sleep_Thread(int64_t milliseconds)
 {
     Sleep(1000);
 }

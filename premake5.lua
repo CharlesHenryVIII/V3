@@ -75,13 +75,13 @@ project "V3"
 
     filter "configurations:Profile"
         defines { "NDEBUG" , "TRACY_ENABLE", "NOMINMAX"}
-        symbols  "off"
-        optimize "On"
+        symbols  "on"
+        optimize "Speed"
 
     filter "configurations:Release"
         defines { "NDEBUG", "NOMINMAX" }
-        symbols  "off"
-        optimize "On"
+        symbols  "on"
+        optimize "Speed"
 
     filter("files:**.hlsl")
         flags("ExcludeFromBuild")

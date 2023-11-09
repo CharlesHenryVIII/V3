@@ -139,6 +139,7 @@ struct Vertex_Cube {
 struct Vertex_Tetra {
     Color color;
     Vec3 p;
+    Vec3 n;
 };
 #pragma pack(pop)
 

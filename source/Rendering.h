@@ -242,6 +242,7 @@ void RenderPresent();
 void DrawPathTracedVoxels();
         void AddCubeToRender(Vec3 p, Color color, Vec3  scale, bool wireframe);
 inline  void AddCubeToRender(Vec3 p, Color color, float scale, bool wireframe) { AddCubeToRender(p, color, { scale, scale, scale }, wireframe); }
+void AddTetrahedronToRender(const Vec3 p, const Vec3 dir, Color color, Vec3  scale, bool wireframe);
 void RenderPrimitives();
 void FinalDraw();
 

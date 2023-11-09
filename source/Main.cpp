@@ -386,6 +386,24 @@ int main(int argc, char* argv[])
                 AddCubeToRender({ scale, 0, 0 }, Red,   { scale_double, scale_half,     scale_half   }, false);
                 AddCubeToRender({ 0, scale, 0 }, Green, { scale_half,   scale_double,   scale_half   }, false);
                 AddCubeToRender({ 0, 0, scale }, Blue,  { scale_half,   scale_half,     scale_double }, false);
+                
+#if 0
+                for (i32 x = -1; x < 2; x++)
+                {
+                    for (i32 y = -1; y < 2; y++)
+                    {
+                        for (i32 z = -1; z < 2; z++)
+                        {
+                            if (x == 0 && y == 0 && z == 0)
+                                continue;
+                            Vec3 p = { (float)x, (float)y, (float)z };
+                            Color c = { 0, 0, 0, 1 };
+                            c.rgb = (p + 1.0f) / 2.0f;
+                            AddTetrahedronToRender(p, p, c, { 0.5, 1, 0.5 }, false);
+                        }
+                    }
+                }
+#endif
             }
 
 #endif

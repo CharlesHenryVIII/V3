@@ -1350,6 +1350,13 @@ void InitializeVideo()
         VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
     }
     {
+        Shader::InputElementDesc layout[] = {
+            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Tetra, color)    },
+            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, p)        },
+            { "NORMAL",     DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, n)        } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Tetra],    "Source/Shaders/Tetra.hlsl",   layout, arrsize(layout)));
+    }
+    {
         Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
         VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
     }
@@ -2159,7 +2166,7 @@ std::vector<Vertex_Tetra> s_tetrasToDraw_transparent;
 std::vector<Vertex_Tetra> s_tetrasToDraw_opaque;
 std::vector<Vertex_Tetra> s_tetrasToDraw_wireframe;
 
-void AddTetrahedronToRender(const Vec3& p, const Vec3& dir, Color color, Vec3  scale, bool wireframe)
+void AddTetrahedronToRender(const Vec3 p, const Vec3 dir, Color color, Vec3  scale, bool wireframe)
 {
     assert(Abs(scale) == scale);
     assert(dir.x != 0 || dir.y != 0 || dir.z != 0);
@@ -2177,15 +2184,23 @@ void AddTetrahedronToRender(const Vec3& p, const Vec3& dir, Color color, Vec3  s
 
     Quat rotate_to_correct_forward = gb_quat_axis_angle({ -1, 0, 0 }, -tau / 4);
     Quat rot = OrientationForDirectionAndUp(Normalize(dir), { 0, 1, 0 });
-    Vertex_Tetra v;
-    for (i32 i = 0; i < arrsize(tetrahedron_positions); i++)
+    Vertex_Tetra v[3] = {};
+    for (i32 i = 0; i < arrsize(tetrahedron_positions); i+= 3)
     {
-        Vec3 scaled = HadamardProduct(tetrahedron_positions[i], scale);
-        Vec3 forward_aligned = gb_quat_rotate_vec3(rotate_to_correct_forward, scaled);
-        Vec3 rotated = gb_quat_rotate_vec3(rot, forward_aligned);
-        v.p = p + rotated;
-        v.color = color;
-        list->push_back(v);
+        for (i32 j = 0; j < arrsize(v); j++)
+        {
+            Vec3 scaled = HadamardProduct(tetrahedron_positions[i + j], scale);
+            Vec3 forward_aligned = gb_quat_rotate_vec3(rotate_to_correct_forward, scaled);
+            Vec3 rotated = gb_quat_rotate_vec3(rot, forward_aligned);
+            v[j].p = p + rotated;
+        }
+        Vec3 normal = Normalize(CrossProduct(v[1].p - v[0].p, v[2].p - v[0].p));
+        for (i32 j = 0; j < arrsize(v); j++)
+        {
+            v[j].color = color;
+            v[j].n = normal;
+            list->push_back(v[j]);
+        }
     }
 }
 

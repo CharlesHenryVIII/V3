@@ -70,17 +70,24 @@ project "V3"
 
     filter "configurations:Debug"
         defines { "_DEBUG" , "TRACY_ENABLE", "NOMINMAX"}
-        symbols  "On"
+        editandcontinue "off"
+        symbols  "Full"
         optimize "Off"
 
     filter "configurations:Profile"
         defines { "NDEBUG" , "TRACY_ENABLE", "NOMINMAX"}
-        symbols  "on"
+        editandcontinue "off"
+        runtime "Release"
+        symbols  "Full"
+        --floatingpoint "fast"
         optimize "Speed"
 
     filter "configurations:Release"
         defines { "NDEBUG", "NOMINMAX" }
-        symbols  "on"
+        editandcontinue "off"
+        runtime "Release"
+        symbols  "Full"
+        --floatingpoint "fast"
         optimize "Speed"
 
     filter("files:**.hlsl")

@@ -354,7 +354,7 @@ int main(int argc, char* argv[])
             if (voxel_hit_result.success)
                 AddCubeToRender(voxel_hit_result.p, transPurple, 0.25f);
 
-                
+
 #else
 #define RAY_BOUNCES 3
             RaycastResult voxel_rays[RAY_BOUNCES] = {};
@@ -386,7 +386,7 @@ int main(int argc, char* argv[])
                 AddCubeToRender({ scale, 0, 0 }, Red,   { scale_double, scale_half,     scale_half   }, false);
                 AddCubeToRender({ 0, scale, 0 }, Green, { scale_half,   scale_double,   scale_half   }, false);
                 AddCubeToRender({ 0, 0, scale }, Blue,  { scale_half,   scale_half,     scale_double }, false);
-                
+
 #if 0
                 for (i32 x = -1; x < 2; x++)
                 {

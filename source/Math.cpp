@@ -240,11 +240,6 @@ i32 ManhattanDistance(Vec3I a, Vec3I b)
 
 
 
-int ComparisonFunction(const void* a, const void* b)
-{
-    return  *(i32*)b - *(i32*)a;
-}
-
 void Swap(void* a, void* b, const i32 size)
 {
 

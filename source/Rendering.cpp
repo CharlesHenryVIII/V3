@@ -1291,7 +1291,7 @@ void InitializeVideo()
     //Create Textures:
     CreateTexture(&g_renderer.textures[Texture::Index_Minecraft], "assets/MinecraftSpriteSheet20120215Modified.png", Texture::Format_R8G8B8A8_UNORM_SRGB, Texture::Filter_Point);
     u8 pixel_texture_data[] = { 255, 255, 255, 255 };
-    CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
+    CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1, 0 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
     CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
 
     {
@@ -1615,8 +1615,9 @@ void RenderUpdate(Vec2I window_size, float deltaTime)
     if (s_dx11.swap_chain.size != window_size)
         UpdateSwapchain(window_size);
 
-    s_dx11.device_context->ClearRenderTargetView(s_dx11.swap_chain.render_target_view, srgb_to_linear(backgroundColor).e);
-    s_dx11.device_context->ClearRenderTargetView(s_dx11.hdr_rtv, srgb_to_linear(backgroundColor).e);
+    Vec4 background_color = srgb_to_linear(backgroundColor);
+    s_dx11.device_context->ClearRenderTargetView(s_dx11.swap_chain.render_target_view, background_color.e);
+    s_dx11.device_context->ClearRenderTargetView(s_dx11.hdr_rtv, background_color.e);
     DX11Texture* depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
     s_dx11.device_context->ClearDepthStencilView(depth->m_depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 

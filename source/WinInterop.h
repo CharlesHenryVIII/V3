@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <thread>
+#include <vector>
 
 bool CreateFolder(const std::string& folderLocation);
 void DebugPrint(const char* fmt, ...);

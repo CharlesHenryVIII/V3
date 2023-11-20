@@ -76,6 +76,9 @@ template<typename T>
 union gbVec2 {
     struct { T x, y; };
     T e[2];
+    gbVec2() = default;
+    gbVec2(T _a) : x(_a), y(_a) {};
+    gbVec2(T _x, T _y) : x(_x), y(_y) {};
 };
 
 template<typename T>
@@ -85,6 +88,9 @@ union gbVec3 {
 
     gbVec2<T> xy;
     T e[3];
+    gbVec3() = default;
+    gbVec3(T _a) : x(_a), y(_a), z(_a) {};
+    gbVec3(T _x, T _y, T _z) : x(_x), y(_y), z(_z) {};
 };
 
 template<typename T>
@@ -95,6 +101,10 @@ union gbVec4 {
     gbVec3<T> xyz;
     gbVec3<T> rgb;
     T e[4];
+
+    gbVec4() = default;
+    gbVec4(T _a) : x(_a), y(_a), z(_a), w(_a) {};
+    gbVec4(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {};
 };
 
 
@@ -105,6 +115,7 @@ union gbMat2 {
     gbVec2<T> col[2];
     T e[4];
     T d[2][2];
+    gbMat2() = default;
 };
 
 template<typename T>
@@ -113,6 +124,7 @@ union gbMat3 {
     gbVec3<T> col[3];
     T e[9];
     T d[3][3];
+    gbMat3() = default;
 };
 
 template<typename T>
@@ -121,6 +133,7 @@ union gbMat4 {
     gbVec4<T> col[4];
     T e[16];
     T d[4][4];
+    gbMat4() = default;
 };
 
 
@@ -130,6 +143,10 @@ union gbQuat {
     gbVec4<T> xyzw;
     gbVec3<T> xyz;
     T e[4];
+
+    gbQuat() = default;
+    gbQuat(T _a) : x(_a), y(_a), z(_a), w(_a) {};
+    gbQuat(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {};
 };
 
 
@@ -1231,7 +1248,7 @@ template<typename T> inline gbVec4<T> &operator/=(gbVec4<T> &a, T scalar) { retu
 
 template<typename T> inline gbMat2<T> operator+(gbMat2<T> const &a, gbMat2<T> const &b) {
     int i, j;
-    gbMat2<T> r = {0};
+    gbMat2<T> r = {};
     for (j = 0; j < 2; j++) {
         for (i = 0; i < 2; i++)
             r.e[2*j+i] = a.e[2*j+i] + b.e[2*j+i];
@@ -1252,7 +1269,7 @@ template<typename T> inline gbMat2<T> operator-(gbMat2<T> const &a, gbMat2<T> co
 template<typename T> inline gbMat2<T> operator*(const gbMat2<T>& a, const gbMat2<T>& b) { return gb_mat2_mul(a, b); }
 template<typename T> inline gbVec2<T> operator*(const gbMat2<T>& a, const gbVec2<T>& v) { return gb_mat2_mul_vec2(a, v); }
 template<typename T> inline gbMat2<T> operator*(const gbMat2<T>& a, const T scalar) {
-    gbMat2<T> r = {0};
+    gbMat2<T> r = {};
     int i;
     for (i = 0; i < 2*2; i++) r.e[i] = a.e[i] * scalar;
     return r;
@@ -1268,7 +1285,7 @@ template<typename T> inline gbMat2<T>& operator*=(gbMat2<T>& a, gbMat2<T> const 
 
 template<typename T> inline gbMat3<T> operator+(gbMat3<T> const &a, gbMat3<T> const &b) {
     int i, j;
-    gbMat3<T> r = {0};
+    gbMat3<T> r = {};
     for (j = 0; j < 3; j++) {
         for (i = 0; i < 3; i++)
             r.e[3*j+i] = a.e[3*j+i] + b.e[3*j+i];
@@ -1289,7 +1306,7 @@ template<typename T> inline gbMat3<T> operator-(gbMat3<T> const &a, gbMat3<T> co
 template<typename T> inline gbMat3<T> operator*(gbMat3<T> const &a, gbMat3<T> const &b) { return gb_mat3_mul(a, b); }
 template<typename T> inline gbVec3<T> operator*(gbMat3<T> const &a, gbVec3<T> v) { return gb_mat3_mul_vec3(a, v); } 
 template<typename T> inline gbMat3<T> operator*(gbMat3<T> const &a, T scalar) {
-    gbMat3<T> r = {0};
+    gbMat3<T> r = {};
     int i;
     for (i = 0; i < 3*3; i++) r.e[i] = a.e[i] * scalar;
     return r;
@@ -1305,7 +1322,7 @@ template<typename T> inline gbMat3<T>& operator*=(gbMat3<T>& a, gbMat3<T> const 
 
 template<typename T> inline gbMat4<T> operator+(gbMat4<T> const &a, gbMat4<T> const &b) {
     int i, j;
-    gbMat4<T> r = {0};
+    gbMat4<T> r = {};
     for (j = 0; j < 4; j++) {
         for (i = 0; i < 4; i++)
             r.e[4*j+i] = a.e[4*j+i] + b.e[4*j+i];
@@ -1315,7 +1332,7 @@ template<typename T> inline gbMat4<T> operator+(gbMat4<T> const &a, gbMat4<T> co
 
 template<typename T> inline gbMat4<T> operator-(gbMat4<T> const &a, gbMat4<T> const &b) {
     int i, j;
-    gbMat4<T> r = {0};
+    gbMat4<T> r = {};
     for (j = 0; j < 4; j++) {
         for (i = 0; i < 4; i++)
             r.e[4*j+i] = a.e[4*j+i] - b.e[4*j+i];
@@ -1326,7 +1343,7 @@ template<typename T> inline gbMat4<T> operator-(gbMat4<T> const &a, gbMat4<T> co
 template<typename T> inline gbMat4<T> operator*(const gbMat4<T>& a, const gbMat4<T>& b) { return gb_mat4_mul(a, b); }
 template<typename T> inline gbVec4<T> operator*(const gbMat4<T>& a, const gbVec4<T>& v) { return gb_mat4_mul_vec4(a, v); }
 template<typename T> inline gbMat4<T> operator*(const gbMat4<T>& a, const T scalar) {
-    gbMat4<T> r = {0};
+    gbMat4<T> r = {};
     int i;
     for (i = 0; i < 4*4; i++) r.e[i] = a.e[i] * scalar;
     return r;

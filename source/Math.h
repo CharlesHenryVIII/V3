@@ -394,7 +394,7 @@ MATH_PREFIX Vec3 Abs(const Vec3& a)
 {
     return { fabs(a.x), fabs(a.y), fabs(a.z) };
 }
-MATH_PREFIX Vec3 Abs(const Vec2& a)
+MATH_PREFIX Vec2 Abs(const Vec2& a)
 {
     return { abs(a.x), abs(a.y) };
 }
@@ -612,9 +612,9 @@ MATH_PREFIX Vec3 Acos(const Vec3& a)
     return { acos(a.x), acos(a.y), acos(a.z) };
 }
 
-MATH_PREFIX Vec3 Round(const Vec2& a)
+MATH_PREFIX Vec2 Round(const Vec2& a)
 {
-    Vec3 r = { roundf(a.x), roundf(a.y) };
+    Vec2 r = { roundf(a.x), roundf(a.y) };
     return r;
 }
 MATH_PREFIX Vec3 Round(const Vec3& a)
@@ -961,4 +961,17 @@ i32 ManhattanDistance(Vec3I a, Vec3I b);
 
 //Vec3 ClosestPointOnLineSegment(const Vec3& A, const Vec3& B, const Vec3& Point);
 
-//void QuickSort(uint8* data, const int32 length, const int32 itemSize, int32 (*compare)(const void* a, const void* b));
+MATH_PREFIX int QuickSortComparisonFunction(const void* a, const void* b)
+{
+    return  *(i32*)b - *(i32*)a;
+}
+MATH_PREFIX int QuickSortComparisonFunction_uint64_t(const void* a, const void* b)
+{
+    return  int(*(uint64_t*)b - *(uint64_t*)a);
+}
+template<typename T>
+MATH_PREFIX int QuickSortComparisonFunction(const void* a, const void* b)
+{
+    return  int(*(T*)b - *(T*)a);
+}
+void QuickSort(u8* data, const i32 length, const i32 itemSize, i32 (*compare)(const void* a, const void* b));

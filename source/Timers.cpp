@@ -14,3 +14,8 @@ uint64_t GetCurrentTime()
 {
     return ((SDL_GetPerformanceCounter() - ct) * 1000 * 1000 * 1000) / f; //nano seconds
 }
+
+uint64_t GetHighPerformanceTimeStampCounter()
+{
+    return __rdtsc();
+}

@@ -39,7 +39,13 @@ struct PS_Output {
 
 //Voxel index list
 Texture3D<uint1> voxel_indices      TEXTURE_REGISTER(SLOT_VOXEL_INDICES);
-sampler     voxel_indices_sampler   SAMPLER_REGISTER(SLOT_VOXEL_INDICES_SAMPLER);
+sampler   voxel_indices_sampler   SAMPLER_REGISTER(SLOT_VOXEL_INDICES_SAMPLER);
+Texture3D<uint1> voxel_indices_mip1 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP1);
+Texture3D<uint1> voxel_indices_mip2 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP2);
+Texture3D<uint1> voxel_indices_mip3 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP3);
+Texture3D<uint1> voxel_indices_mip4 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP4);
+Texture3D<uint1> voxel_indices_mip5 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP5);
+Texture3D<uint1> voxel_indices_mip6 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP6);
 //Random colors
 Texture2D   random_texture          TEXTURE_REGISTER(SLOT_RANDOM_TEXTURE);
 sampler     random_texture_sampler  SAMPLER_REGISTER(SLOT_RANDOM_TEXTURE_SAMPLER);
@@ -96,7 +102,59 @@ uint GetIndexFromGameVoxelPosition(int3 p)
 {
     int4 game_pos = 0;
     game_pos.xyz = GameVoxelToTexelFetch(p);
+#if 0
     uint voxel_index = voxel_indices.Load(game_pos);
+#elif 1
+    uint mip = 2;
+    float div = float(1 << mip);
+    game_pos.x = int(float(game_pos.x) / div);
+    game_pos.y = int(float(game_pos.y) / div);
+    game_pos.z = int(float(game_pos.z) / div);
+    game_pos.w = float(mip);
+
+    //int mip_level = 1;
+    //int width;
+    //int height;
+    //int depth;
+    //int levels;
+    //voxel_indices.GetDimensions(mip_level, width, height, depth, levels);
+
+    //game_pos.x = 0;
+    //game_pos.y = 0;
+    //game_pos.z = int(float(width));
+    //game_pos.x = int(float(mip_level));
+    //game_pos.y = int(float(mip_level));
+    //game_pos.z = int(float(mip_level));
+    uint voxel_index = voxel_indices.Load(game_pos);
+    //float3 loc = float3(0, 0, 0);
+    //float level = 1;
+    //voxel_index = voxel_indices.SampleLevel(voxel_indices_sampler, loc, level);
+
+//#elif 0
+//    game_pos.xyz = int3(int(float(game_pos.x) / 2), int(float(game_pos.y) / 2), int(float(game_pos.z) / 2));
+//    uint voxel_index = voxel_indices_mip1.Load(game_pos);
+//#elif 0
+//    const float div = 4;
+//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
+//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
+//#elif 0
+//    const float div = 8;
+//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
+//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
+//#elif 0
+//    const float div = 16;
+//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
+//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
+//#elif 0
+//    const float div = 32;
+//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
+//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
+//#elif 0
+//    const float div = 64;
+//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
+//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
+#endif
+
     return voxel_index;
 }
 
@@ -143,10 +201,11 @@ int3 float3ToVoxelPosition(const float3 p)
     return int3(floor(p));
 }
 
-void Linecast(  out uint      raycast_color_index,
-                out float3    raycast_p,
-                out float     raycast_distance_mag,
-                out float3    raycast_normal,
+void Linecast(  out uint    raycast_color_index,
+                out float3  raycast_p,
+                out float   raycast_distance_mag,
+                out float3  raycast_normal,
+                out int     loop_count,
                 const float3    ray_origin,
                 const float3    ray_direction,
                 const float     ray_length,
@@ -166,6 +225,7 @@ void Linecast(  out uint      raycast_color_index,
     float3 tMax = abs((pClose - ray_origin) / ray_direction);
     const float3 tDelta = abs(1.0 / ray_direction);
     int3 voxel_p = int3(floor(p));
+    loop_count = 0;
 
     if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
         return;
@@ -174,9 +234,9 @@ void Linecast(  out uint      raycast_color_index,
     raycast_normal = normal;
     raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p);
 
-
     while (raycast_color_index == 0)
     {
+        loop_count++;
         if (distance(p, ray_origin) > ray_length)
         {
             return;
@@ -300,7 +360,7 @@ void RayVsAABB( out uint      raycast_color_index,
     raycast_color_index = 1;
 }
 
-void RayVsVoxel(out uint      raycast_color_index,
+int RayVsVoxel(out uint      raycast_color_index,
                 out float3    raycast_p,
                 out float     raycast_distance_mag,
                 out float3    raycast_normal,
@@ -329,7 +389,7 @@ void RayVsVoxel(out uint      raycast_color_index,
     //raycast_color_index = aabb_raycast_color_index;
     //return;
 
-
+    int loop_count = 0;
     if (aabb_raycast_color_index != 0)
     {
         float3 clamped_ray;
@@ -348,11 +408,13 @@ void RayVsVoxel(out uint      raycast_color_index,
                     raycast_p,
                     raycast_distance_mag,
                     raycast_normal,
+                    loop_count,
                     linecast_ray_origin,
                     linecast_ray_direction,
                     1000.0,
                     aabb_raycast_normal);
     }
+    return loop_count;
 }
 
 uint PCG_Random(uint state)
@@ -716,6 +778,12 @@ struct PointColor {
 #define RAY_BOUNCES 3
 #define RAY_SAMPLES 3
 
+    //uint voxel_index = voxel_indices.Load(int4(0, 0, 0, 1));
+    //float4 color_ = GetColorFromIndex(voxel_index);
+    //output.depth = 0;
+    //output.color = color_;
+    //return output;
+
     const float3 background_color   = srgb_to_linear(float4(0.263, 0.706, 0.965, 1)).rgb;
     const float3 sun_position       = float3(0, 50, 50);
     const float3 sun_color          = srgb_to_linear(float4(0.8, 0.8, 0.8, 1)).rgb;
@@ -725,7 +793,6 @@ struct PointColor {
     float3 sun_ray_origin;
     float3 sun_ray_direction;
     sun_ray_origin = sun_position;
-    output.color = 0;
     output.color.a = 1;
     float4 bounce_color = output.color;
     float4 sample_color = output.color;
@@ -743,6 +810,18 @@ struct PointColor {
             start_hit_voxel_normal,
             next_ray_origin,
             next_ray_direction);
+#if 0 //checking loop count
+    int loop_count_first = RayVsVoxel(start_hit_voxel_color_index,
+            start_hit_voxel_p,
+            start_hit_voxel_distance_mag,
+            start_hit_voxel_normal,
+            next_ray_origin,
+            next_ray_direction);
+    float loop_color = float(loop_count_first) / 64;
+    output.depth = 0;
+    output.color = float4(loop_color, loop_color, loop_color, loop_color);
+    return output;
+#endif
 
     if(start_hit_voxel_color_index == 0)
     {

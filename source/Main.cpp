@@ -89,16 +89,135 @@ int main(int argc, char* argv[])
 
     {
 
+#if 0
+        Texture::Index starting_index = Texture::Index_Voxel_Indices_mip1;
+        const u32 mip_levels = 6;
+        for (u32 i = 0; i < mip_levels; i++)
+        {
+            const u32 mip_level = i + 1;
+            const i32 dim = VOXEL_MAX_SIZE >> mip_level;
+            u8* data = new u8[dim * dim * dim];
+            for (i32 x = 0; x < dim; x++)
+            {
+                for (i32 y = 0; y < dim; y++)
+                {
+                    for (i32 z = 0; z < dim; z++)
+                    {
+                        const u32 x_base = u32(x) << mip_level;
+                        const u32 y_base = u32(y) << mip_level;
+                        const u32 z_base = u32(z) << mip_level;
+                        u8 r = voxels.color_indices[0].e[x_base][y_base][z_base];
+                        r |= voxels.color_indices[0].e[x_base + 1][y_base + 0][z_base + 0];
+                        r |= voxels.color_indices[0].e[x_base + 1][y_base + 1][z_base + 0];
+                        r |= voxels.color_indices[0].e[x_base + 0][y_base + 1][z_base + 0];
+                        r |= voxels.color_indices[0].e[x_base + 0][y_base + 1][z_base + 1];
+                        r |= voxels.color_indices[0].e[x_base + 0][y_base + 0][z_base + 1];
+                        r |= voxels.color_indices[0].e[x_base + 1][y_base + 0][z_base + 1];
+                        r |= voxels.color_indices[0].e[x_base + 1][y_base + 1][z_base + 1];
+
+                        data[(z)+(y * dim) + (x * dim * dim)] = r; //no worky
+                    }
+                }
+            }
+            Texture::TextureParams mip_parameters = {
+                .size = { dim, dim, dim },
+                .format = Texture::Format_R8_UINT,
+                .mode = Texture::Address_Clamp,
+                .filter = Texture::Filter_Point,
+                .render_target = false,
+                .bytes_per_pixel = sizeof(voxels.color_indices[0].e[0][0][0]),
+            };
+            CreateTexture(&g_renderer.textures[starting_index + i], mip_parameters, data);
+            delete data;
+        }
         Texture::TextureParams voxel_indices_parameters = {
-            .size   = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
+            .size = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
             .format = Texture::Format_R8_UINT,
-            .mode   = Texture::Address_Clamp,
+            .mode = Texture::Address_Clamp,
             .filter = Texture::Filter_Point,
             .render_target = false,
             .bytes_per_pixel = sizeof(voxels.color_indices[0].e[0][0][0]),
-            .data   = voxels.color_indices[0].e,
         };
-        CreateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], voxel_indices_parameters);
+        CreateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], voxel_indices_parameters, voxels.color_indices[0].e);
+#else
+
+        Texture::TextureParams voxel_indices_parameters = {
+            .size = { VOXEL_MAX_SIZE, VOXEL_MAX_SIZE, VOXEL_MAX_SIZE },
+            .format = Texture::Format_R8_UINT,
+            .mode = Texture::Address_Clamp,
+            .filter = Texture::Filter_Point,
+            .render_target = false,
+            .bytes_per_pixel = sizeof(voxels.color_indices[0].e[0][0][0]),
+        };
+        //const u8* datas[] = { (u8*)voxels.color_indices[0].e};
+        const i32 mip_levels = 6;
+        CreateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], voxel_indices_parameters, mip_levels, (u8*)voxels.color_indices[0].e);
+        u32 width = VOXEL_MAX_SIZE * sizeof(voxels.color_indices[0].e[0][0][0]);
+        UpdateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], 0, voxels.color_indices[0].e, width, width * VOXEL_MAX_SIZE);
+        std::vector<u8*> mip_data;
+        mip_data.push_back((u8*)voxels.color_indices[0].e);
+        for (i32 mip_level = 1; mip_level < mip_levels; mip_level++)
+        {
+            const i32 read_dim = VOXEL_MAX_SIZE >> (mip_level - 1);
+            const i32 write_dim = VOXEL_MAX_SIZE >> mip_level;
+            const u8* ref = mip_data[mip_level - 1];
+            u8* data = new u8[write_dim * write_dim * write_dim];
+            for (i32 x = 0; x < write_dim; x++)
+            {
+                for (i32 y = 0; y < write_dim; y++)
+                {
+                    for (i32 z = 0; z < write_dim; z++)
+                    {
+                        const u32 x_base = u32(x) << 1;
+                        const u32 y_base = u32(y) << 1;
+                        const u32 z_base = u32(z) << 1;
+#if 0
+#if 1
+                        const u32 x_base1 = u32(x) << mip_level;
+                        const u32 y_base1 = u32(y) << mip_level;
+                        const u32 z_base1 = u32(z) << mip_level;
+                        u8 r = voxels.color_indices[0].e[x_base1][y_base1][z_base1];
+                        r |= voxels.color_indices[0].e[x_base1 + 1][y_base1 + 0][z_base1 + 0];
+                        r |= voxels.color_indices[0].e[x_base1 + 1][y_base1 + 1][z_base1 + 0];
+                        r |= voxels.color_indices[0].e[x_base1 + 0][y_base1 + 1][z_base1 + 0];
+                        r |= voxels.color_indices[0].e[x_base1 + 0][y_base1 + 1][z_base1 + 1];
+                        r |= voxels.color_indices[0].e[x_base1 + 0][y_base1 + 0][z_base1 + 1];
+                        r |= voxels.color_indices[0].e[x_base1 + 1][y_base1 + 0][z_base1 + 1];
+                        r |= voxels.color_indices[0].e[x_base1 + 1][y_base1 + 1][z_base1 + 1];
+#else
+                        u8 r = ref[x_base][y_base][z_base];
+                        r |= ref[x_base + 1][y_base + 0][z_base + 0];
+                        r |= ref[x_base + 1][y_base + 1][z_base + 0];
+                        r |= ref[x_base + 0][y_base + 1][z_base + 0];
+                        r |= ref[x_base + 0][y_base + 1][z_base + 1];
+                        r |= ref[x_base + 0][y_base + 0][z_base + 1];
+                        r |= ref[x_base + 1][y_base + 0][z_base + 1];
+                        r |= ref[x_base + 1][y_base + 1][z_base + 1];
+#endif
+#else
+                        u8 r = ref[(read_dim * read_dim * x_base) + (read_dim * y_base) + z_base];
+                        r |= ref[(read_dim * read_dim * (x_base + 1)) + (read_dim * (y_base + 0)) + (z_base + 0)];
+                        r |= ref[(read_dim * read_dim * (x_base + 1)) + (read_dim * (y_base + 1)) + (z_base + 0)];
+                        r |= ref[(read_dim * read_dim * (x_base + 0)) + (read_dim * (y_base + 1)) + (z_base + 0)];
+                        r |= ref[(read_dim * read_dim * (x_base + 0)) + (read_dim * (y_base + 1)) + (z_base + 1)];
+                        r |= ref[(read_dim * read_dim * (x_base + 0)) + (read_dim * (y_base + 0)) + (z_base + 1)];
+                        r |= ref[(read_dim * read_dim * (x_base + 1)) + (read_dim * (y_base + 0)) + (z_base + 1)];
+                        r |= ref[(read_dim * read_dim * (x_base + 1)) + (read_dim * (y_base + 1)) + (z_base + 1)];
+#endif
+
+                        data[(z)+(y * write_dim) + (x * write_dim * write_dim)] = r;
+                    }
+                }
+            }
+            width = write_dim * sizeof(VoxelBlockData::e[0][0][0]);
+            UpdateTexture(&g_renderer.textures[Texture::Index_Voxel_Indices], mip_level, data, width, width * write_dim);
+            mip_data.push_back(data);
+        }
+        for (i32 i = 1; i < mip_data.size(); i++)
+        {
+            delete mip_data[i];
+        }
+#endif
         CreateGpuBuffer(&g_renderer.structure_voxel_materials,"voxel_materials", false, GpuBuffer::Type::Structure);
         g_renderer.structure_voxel_materials->Upload(voxels.materials, VOXEL_PALETTE_MAX, sizeof(voxels.materials[0]));
     }
@@ -473,7 +592,7 @@ int main(int argc, char* argv[])
                 .view_from_projection = view_from_projection,
                 .world_from_view = world_from_view,
                 .screen_size = g_renderer.size,
-                .random_texture_size = g_renderer.textures[Texture::Index_Random]->m_size.xy,
+                .random_texture_size = g_renderer.textures[Texture::Index_Random]->m_parameters.size.xy,
                 .voxel_size = voxels.size,
                 .total_time = float(totalTime),
                 .camera_position = camera_pos_world,

@@ -130,7 +130,7 @@ void DeleteTexture(Texture** texture)
     case Texture::Dimension_2D: SafeRelease(tex->m_texture2D); break;
     case Texture::Dimension_3D: SafeRelease(tex->m_texture3D); break;
     }
-    if (tex->m_type == Texture::Type_Depth)
+    if (tex->m_parameters.type == Texture::Type_Depth)
     {
         assert(tex->m_view == nullptr);
         assert(tex->m_sampler == nullptr);
@@ -152,9 +152,7 @@ bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format fo
     tp.size = size;
     tp.bytes_per_pixel = bytes_per_pixel;
     tp.format = format;
-    tp.data = data;
-    bool r = CreateTexture(texture, tp);
-    DEBUG_LOG("Texture Created\n");
+    bool r = CreateTexture(texture, tp, data);
     return r;
 }
 bool CreateTexture(Texture** texture, const char* fileLocation, Texture::Format format, Texture::Filter filter)
@@ -162,31 +160,33 @@ bool CreateTexture(Texture** texture, const char* fileLocation, Texture::Format 
     Texture::TextureParams tp = {};
     u8* data = stbi_load(fileLocation, &tp.size.x, &tp.size.y, &tp.bytes_per_pixel, STBI_rgb_alpha);
     tp.format = format;
-    tp.data = data;
     tp.filter = filter;
-    bool r = CreateTexture(texture, tp);
+    bool r = CreateTexture(texture, tp, data);
     stbi_image_free(data);
-    DEBUG_LOG("Texture Created\n");
     return r;
 }
-bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
+bool CreateTexture(Texture** texture, const Texture::TextureParams& tp, const void* data)
+{
+    const u8* new_data[] = { (u8*)data };
+    return CreateTexture(texture, tp, 1, (u8*)data);
+}
+bool CreateTexture(Texture** texture, const Texture::TextureParams& tp, u32 mip_levels, const u8* data)
 {
     VALIDATE_V(texture, false);
     VALIDATE_V(*texture == nullptr, false);
+    //VALIDATE_V(data, false);
+
     DX11Texture* tex = new DX11Texture;
     *texture = tex;
 
     tex->m_parameters = tp;
-    tex->m_size = tp.size;
-    tex->m_bytes_per_pixel = tp.bytes_per_pixel;
-    tex->m_type = tp.type;
-    assert(tex->m_size.x != -1 && tex->m_size.x != 0);
-
-    if (tex->m_size.z > 0)
+    tex->m_mip_levels = mip_levels;
+    assert(tex->m_parameters.size.x != -1 && tex->m_parameters.size.x != 0);
+    if (tex->m_parameters.size.z > 0)
     {
         tex->m_dimension = Texture::Dimension_3D;
     }
-    else if (tex->m_size.y > 0)
+    else if (tex->m_parameters.size.y > 0)
     {
         tex->m_dimension = Texture::Dimension_2D;
     }
@@ -194,26 +194,27 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
     {
         tex->m_dimension = Texture::Dimension_1D;
     }
+
     switch (tp.format)
     {
-    case Texture::Format_R11G11B10_FLOAT:       tex->m_format = DXGI_FORMAT_R11G11B10_FLOAT;      break;
-    case Texture::Format_D32_FLOAT:             tex->m_format = DXGI_FORMAT_D32_FLOAT;            break;
-    case Texture::Format_D16_UNORM:             tex->m_format = DXGI_FORMAT_D16_UNORM;            break;
-    case Texture::Format_R8G8B8A8_UNORM:        tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM;       break;
-    case Texture::Format_R8G8B8A8_UNORM_SRGB:   tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  break;
-    case Texture::Format_R8G8B8A8_UINT:         tex->m_format = DXGI_FORMAT_R8G8B8A8_UINT;        break;
-    case Texture::Format_R8_UINT:               tex->m_format = DXGI_FORMAT_R8_UINT;              break;
-    default: FAIL;                              tex->m_format = DXGI_FORMAT_UNKNOWN;              break;
+    case Texture::Format_R11G11B10_FLOAT:       tex->m_format = DXGI_FORMAT_R11G11B10_FLOAT;    break;
+    case Texture::Format_D32_FLOAT:             tex->m_format = DXGI_FORMAT_D32_FLOAT;          break;
+    case Texture::Format_D16_UNORM:             tex->m_format = DXGI_FORMAT_D16_UNORM;          break;
+    case Texture::Format_R8G8B8A8_UNORM:        tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM;     break;
+    case Texture::Format_R8G8B8A8_UNORM_SRGB:   tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;break;
+    case Texture::Format_R8G8B8A8_UINT:         tex->m_format = DXGI_FORMAT_R8G8B8A8_UINT;      break;
+    case Texture::Format_R8_UINT:               tex->m_format = DXGI_FORMAT_R8_UINT;            break;
+    default: FAIL;                              tex->m_format = DXGI_FORMAT_UNKNOWN;            break;
     }
 
-    switch (tex->m_type)
+    switch (tex->m_parameters.type)
     {
     case Texture::Type_Depth:
     {
         D3D11_TEXTURE2D_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
-        desc.Width = (u32)tex->m_size.x;
-        desc.Height = (u32)tex->m_size.y;
+        desc.Width = (u32)tex->m_parameters.size.x;
+        desc.Height = (u32)tex->m_parameters.size.y;
         desc.MipLevels = desc.ArraySize = 1;
         switch (tp.format)
         {
@@ -244,11 +245,12 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             &desc,                          // Depth stencil desc
             &tex->m_depth_stencil_view));    // [out] Depth stencil view
     }
+    DEBUG_LOG("Texture Created\n");
     return true;
     }
 
 
-    assert(tex->m_bytes_per_pixel);
+    assert(tex->m_parameters.bytes_per_pixel);
 
     //Create Texture
     switch (tex->m_dimension)
@@ -258,20 +260,21 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         {
             D3D11_TEXTURE1D_DESC desc;
             ZeroMemory(&desc, sizeof(desc));
-            desc.Width = (u32)tex->m_size.x;
-            desc.MipLevels = desc.ArraySize = 1;
+            desc.Width = (u32)tex->m_parameters.size.x;
+            desc.MipLevels = desc.ArraySize = tex->m_mip_levels;
             desc.Format = tex->m_format;
             desc.Usage = D3D11_USAGE_DEFAULT;
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             desc.CPUAccessFlags = 0;
             desc.MiscFlags = 0;
 
-            D3D11_SUBRESOURCE_DATA subResource;
-            subResource.pSysMem = tp.data;
-            subResource.SysMemPitch = desc.Width * tex->m_bytes_per_pixel;
-            subResource.SysMemSlicePitch = 0;
+            assert(tex->m_mip_levels == 1);
+            D3D11_SUBRESOURCE_DATA sub_resource;
+            sub_resource.pSysMem = data;
+            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+            sub_resource.SysMemSlicePitch = 0;
 
-            HR(s_dx11.device->CreateTexture1D(&desc, &subResource, &tex->m_texture1D));
+            HR(s_dx11.device->CreateTexture1D(&desc, data ? &sub_resource : nullptr, &tex->m_texture1D));
         }
 
         //Create View
@@ -292,9 +295,9 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         {
             D3D11_TEXTURE2D_DESC desc;
             ZeroMemory(&desc, sizeof(desc));
-            desc.Width = (u32)tex->m_size.x;
-            desc.Height = (u32)tex->m_size.y;
-            desc.MipLevels = desc.ArraySize = 1;
+            desc.Width = (u32)tex->m_parameters.size.x;
+            desc.Height = (u32)tex->m_parameters.size.y;
+            desc.MipLevels = desc.ArraySize = tex->m_mip_levels;
             desc.Format = tex->m_format;
             desc.SampleDesc.Count = 1;
             desc.SampleDesc.Quality = 0;
@@ -305,17 +308,13 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             desc.CPUAccessFlags = 0;
             desc.MiscFlags = 0;
 
-            D3D11_SUBRESOURCE_DATA sub_resource_actual;
-            D3D11_SUBRESOURCE_DATA* sub_resource = nullptr;
-            if (tp.data)
-            {
-                sub_resource_actual.pSysMem = tp.data;
-                sub_resource_actual.SysMemPitch = desc.Width * tex->m_bytes_per_pixel;
-                sub_resource_actual.SysMemSlicePitch = 0;
-                sub_resource = &sub_resource_actual;
-            }
+            assert(tex->m_mip_levels == 1);
+            D3D11_SUBRESOURCE_DATA sub_resource;
+            sub_resource.pSysMem = data;
+            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+            sub_resource.SysMemSlicePitch = 0;
 
-            HR(s_dx11.device->CreateTexture2D(&desc, sub_resource, &tex->m_texture2D));
+            HR(s_dx11.device->CreateTexture2D(&desc, data ? &sub_resource : nullptr, &tex->m_texture2D));
         }
 
         //Create View
@@ -336,22 +335,38 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         {
             D3D11_TEXTURE3D_DESC desc;
             ZeroMemory(&desc, sizeof(desc));
-            desc.Width = (u32)tex->m_size.x;
-            desc.Height = (u32)tex->m_size.y;
-            desc.Depth = (u32)tex->m_size.z;
-            desc.MipLevels = 1;
+            desc.Width = (u32)tex->m_parameters.size.x;
+            desc.Height = (u32)tex->m_parameters.size.y;
+            desc.Depth = (u32)tex->m_parameters.size.z;
+            desc.MipLevels = tex->m_mip_levels;
             desc.Format = tex->m_format;
             desc.Usage = D3D11_USAGE_DEFAULT;
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             desc.CPUAccessFlags = 0;
             desc.MiscFlags = 0;
 
-            D3D11_SUBRESOURCE_DATA subResource;
-            subResource.pSysMem = tp.data;
-            subResource.SysMemPitch = desc.Width * tex->m_bytes_per_pixel;
-            subResource.SysMemSlicePitch = desc.Height * subResource.SysMemPitch;
+#if 0
+            D3D11_SUBRESOURCE_DATA sub_resource;
+            sub_resource.pSysMem = data;
+            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+            sub_resource.SysMemSlicePitch = desc.Height * sub_resource.SysMemPitch;
+#else
+            D3D11_SUBRESOURCE_DATA sub_resource[MAX_MIPS] = {};
+            for (u32 i = 0; i < tex->m_mip_levels; i++)
+            {
+                sub_resource[i].pSysMem = nullptr;
+#if 0
+                sub_resource[i].SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+                sub_resource[i].SysMemSlicePitch = desc.Height * sub_resource[i].SysMemPitch;
+#else
+                sub_resource[i].SysMemPitch = (desc.Width >> i) * tex->m_parameters.bytes_per_pixel;
+                sub_resource[i].SysMemSlicePitch = (desc.Height >> i) * sub_resource[i].SysMemPitch;
+#endif
+            }
+#endif
+                
 
-            HR(s_dx11.device->CreateTexture3D(&desc, &subResource, &tex->m_texture3D));
+            HR(s_dx11.device->CreateTexture3D(&desc, nullptr, &tex->m_texture3D));
         }
 
         //Create View
@@ -360,7 +375,7 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
             ZeroMemory(&desc, sizeof(desc));
             desc.Format = tex->m_format;
             desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE3D;
-            desc.Texture3D.MipLevels = 1;
+            desc.Texture3D.MipLevels = tex->m_mip_levels;
             desc.Texture3D.MostDetailedMip = 0;
             HR(s_dx11.device->CreateShaderResourceView(tex->m_texture3D, &desc, &tex->m_view));
         }
@@ -397,6 +412,32 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp)
         desc.MaxLOD = 0;
         HR(s_dx11.device->CreateSamplerState(&desc, &tex->m_sampler));
     }
+    DEBUG_LOG("Texture Created\n");
+    return true;
+}
+
+bool UpdateTexture(Texture** texture, u32 mip_slice, void* data, u32 row_pitch_bytes, u32 depth_pitch_bytes)
+{
+    VALIDATE_V(texture, false);
+    VALIDATE_V(*texture, false);
+    DX11Texture* t = reinterpret_cast<DX11Texture*>(*texture);
+    switch (t->m_dimension)
+    {
+    case Texture::Dimension_1D: FAIL; break;
+    case Texture::Dimension_2D: FAIL; break;
+    case Texture::Dimension_3D:
+        s_dx11.device_context->UpdateSubresource(
+            t->m_texture3D,                                         //[in]           ID3D11Resource  *pDstResource,
+            D3D11CalcSubresource(mip_slice, 0, t->m_mip_levels),    //[in]           UINT            DstSubresource,
+            NULL,                                                   //[in, optional] const D3D11_BOX *pDstBox,
+            data,                                                   //[in]           const void      *pSrcData,
+            row_pitch_bytes,                                        //[in]           UINT            SrcRowPitch,
+            depth_pitch_bytes                                       //[in]           UINT            SrcDepthPitch
+        );
+    break;
+    default: FAIL; break;
+    }
+
     return true;
 }
 
@@ -646,6 +687,7 @@ struct DX11IncludeManager : ID3DInclude
     }
     virtual HRESULT Close(LPCVOID pData) override
     {
+        delete file;
         if (pData == nullptr)
             return E_FAIL;
         return S_OK;
@@ -758,7 +800,9 @@ bool Shader::CompileShader(std::string text, const std::string& file_name, Type 
         FAIL;
     }
 
-    u32 flags1 = D3DCOMPILE_WARNINGS_ARE_ERRORS | D3DCOMPILE_PREFER_FLOW_CONTROL;
+    u32 flags1 = 0;
+    //flags1 |= D3DCOMPILE_WARNINGS_ARE_ERRORS;
+    flags1 |= D3DCOMPILE_PREFER_FLOW_CONTROL;
 #if _DEBUG
     //;
     flags1 |= D3DCOMPILE_DEBUG;
@@ -786,7 +830,6 @@ bool Shader::CompileShader(std::string text, const std::string& file_name, Type 
     );
     delete wide_char;
     failed = !code || !!errors || FAILED(compile_result);
-    //assert(code);
 
     if (!failed)
     {
@@ -1105,7 +1148,7 @@ void UpdateSwapchain(const Vec2I& window_size)
             tp.size.xy = window_size;
             assert(tp.size.z == 0);
             DeleteTexture(t);
-            CreateTexture(t, tp);
+            CreateTexture(t, tp, nullptr);
         }
     }
     {
@@ -1116,7 +1159,7 @@ void UpdateSwapchain(const Vec2I& window_size)
             tp.size.xy = window_size;
             assert(tp.size.z == 0);
             DeleteTexture(t);
-            CreateTexture(t, tp);
+            CreateTexture(t, tp, nullptr);
             CreateRenderTargetView(&s_dx11.hdr_rtv, Texture::Index_Backbuffer_HDR);
         }
     }
@@ -1296,16 +1339,15 @@ void InitializeVideo()
 
     {
         Texture::TextureParams tp = {
-            .size   = ToVec3I(s_dx11.swap_chain.size, 0),
+            .size = ToVec3I(s_dx11.swap_chain.size, 0),
             .format = Texture::Format_D32_FLOAT,
-            .mode   = Texture::Address_Invalid,
+            .mode = Texture::Address_Invalid,
             .filter = Texture::Filter_Invalid,
-            .type   = Texture::Type_Depth,
+            .type = Texture::Type_Depth,
             .render_target = true,
             .bytes_per_pixel = 0,
-            .data = 0,
         };
-        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_Depth], tp);
+        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_Depth], tp, nullptr);
     }
     {
         Texture::TextureParams tp = {
@@ -1316,9 +1358,8 @@ void InitializeVideo()
             .type   = Texture::Type_Texture,
             .render_target = true,
             .bytes_per_pixel = 4,
-            .data = 0,
         };
-        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_HDR], tp);
+        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_HDR], tp, nullptr);
     }
 
     //Create Shaders:
@@ -1832,6 +1873,12 @@ void DrawPathTracedVoxels()
     ID3D11DeviceContext* context = s_dx11.device_context;
     DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Voxel]);
     DX11Texture* voxel_indices  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices]);
+    DX11Texture* voxel_indices_mip1 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip1]);
+    DX11Texture* voxel_indices_mip2 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip2]);
+    DX11Texture* voxel_indices_mip3 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip3]);
+    DX11Texture* voxel_indices_mip4 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip4]);
+    DX11Texture* voxel_indices_mip5 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip5]);
+    DX11Texture* voxel_indices_mip6 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip6]);
     DX11Texture* random         = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Random]);
     DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
     DX11Texture* depth  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
@@ -1889,6 +1936,12 @@ void DrawPathTracedVoxels()
         context->PSSetSamplers(SLOT_RANDOM_TEXTURE_SAMPLER, 1, &random->m_sampler);
 
         context->PSSetShaderResources(SLOT_VOXEL_INDICES,   1, &voxel_indices->m_view);
+        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP1,  1, &voxel_indices_mip1->m_view);
+        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP2,  1, &voxel_indices_mip2->m_view);
+        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP3,  1, &voxel_indices_mip3->m_view);
+        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP4,  1, &voxel_indices_mip4->m_view);
+        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP5,  1, &voxel_indices_mip5->m_view);
+        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP6,  1, &voxel_indices_mip6->m_view);
         context->PSSetShaderResources(SLOT_RANDOM_TEXTURE,  1, &random->m_view);
     }
 

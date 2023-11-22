@@ -8,6 +8,7 @@
 
 #include <unordered_map>
 
+#define MAX_MIPS 10
 
 
 
@@ -22,6 +23,12 @@ struct Texture {
         Index_Minecraft,
         Index_Plain,
         Index_Voxel_Indices,
+        Index_Voxel_Indices_mip1,
+        Index_Voxel_Indices_mip2,
+        Index_Voxel_Indices_mip3,
+        Index_Voxel_Indices_mip4,
+        Index_Voxel_Indices_mip5,
+        Index_Voxel_Indices_mip6,
         Index_Random,
         Index_Backbuffer_Depth,
         Index_Backbuffer_HDR,
@@ -75,19 +82,18 @@ struct Texture {
         Type type = Type_Texture;
         bool render_target;
         i32 bytes_per_pixel;
-        const void* data;
     };
 
-    Vec3I m_size = {};
-    i32 m_bytes_per_pixel = 0;//bytes per pixel
+    u32 m_mip_levels = 1;
     Dimension m_dimension;
-    Type m_type;
     TextureParams m_parameters;
 };
 
-bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format format, i32 bytes_per_pixel);
+bool CreateTexture(Texture** texture, const void** data, Vec3I size, Texture::Format format, i32 bytes_per_pixel);
 bool CreateTexture(Texture** texture, const char* fileLocation, Texture::Format format, Texture::Filter filter);
-bool CreateTexture(Texture** texture, const Texture::TextureParams& tp);
+bool CreateTexture(Texture** texture, const Texture::TextureParams& tp, u32 mip_levels, const u8* data);
+bool CreateTexture(Texture** texture, const Texture::TextureParams& tp, const void* data);
+bool UpdateTexture(Texture** texture, u32 mip_slice, void* data, u32 row_pitch_bytes, u32 depth_pitch_bytes);
 void DeleteTexture(Texture** texture);
 
 

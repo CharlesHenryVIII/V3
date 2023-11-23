@@ -100,60 +100,16 @@ int3 GameVoxelToTexelFetch(int3 a)
 
 uint GetIndexFromGameVoxelPosition(int3 p)
 {
-    int4 game_pos = 0;
+    int4 game_pos;
     game_pos.xyz = GameVoxelToTexelFetch(p);
-#if 0
-    uint voxel_index = voxel_indices.Load(game_pos);
-#elif 1
-    uint mip = 2;
+    uint mip = 0;
     float div = float(1 << mip);
     game_pos.x = int(float(game_pos.x) / div);
     game_pos.y = int(float(game_pos.y) / div);
     game_pos.z = int(float(game_pos.z) / div);
     game_pos.w = float(mip);
 
-    //int mip_level = 1;
-    //int width;
-    //int height;
-    //int depth;
-    //int levels;
-    //voxel_indices.GetDimensions(mip_level, width, height, depth, levels);
-
-    //game_pos.x = 0;
-    //game_pos.y = 0;
-    //game_pos.z = int(float(width));
-    //game_pos.x = int(float(mip_level));
-    //game_pos.y = int(float(mip_level));
-    //game_pos.z = int(float(mip_level));
     uint voxel_index = voxel_indices.Load(game_pos);
-    //float3 loc = float3(0, 0, 0);
-    //float level = 1;
-    //voxel_index = voxel_indices.SampleLevel(voxel_indices_sampler, loc, level);
-
-//#elif 0
-//    game_pos.xyz = int3(int(float(game_pos.x) / 2), int(float(game_pos.y) / 2), int(float(game_pos.z) / 2));
-//    uint voxel_index = voxel_indices_mip1.Load(game_pos);
-//#elif 0
-//    const float div = 4;
-//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
-//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
-//#elif 0
-//    const float div = 8;
-//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
-//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
-//#elif 0
-//    const float div = 16;
-//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
-//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
-//#elif 0
-//    const float div = 32;
-//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
-//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
-//#elif 0
-//    const float div = 64;
-//    game_pos.xyz = int3(int(float(game_pos.x) / div), int(float(game_pos.y) / div), int(float(game_pos.z) / div));
-//    uint voxel_index = voxel_indices_mip2.Load(game_pos);
-#endif
 
     return voxel_index;
 }

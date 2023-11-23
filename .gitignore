@@ -3,7 +3,7 @@ Debug/
 Build/
 .vim/
 .vs/
-x64/
+#x64/
 #Contrib/imgui-master/backends/
 #Contrib/imgui-master/docs/
 #Contrib/imgui-master/examples/

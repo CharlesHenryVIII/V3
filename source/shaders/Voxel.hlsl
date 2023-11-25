@@ -39,7 +39,7 @@ struct PS_Output {
 
 //Voxel index list
 Texture3D<uint1> voxel_indices      TEXTURE_REGISTER(SLOT_VOXEL_INDICES);
-sampler   voxel_indices_sampler   SAMPLER_REGISTER(SLOT_VOXEL_INDICES_SAMPLER);
+sampler   voxel_indices_sampler     SAMPLER_REGISTER(SLOT_VOXEL_INDICES_SAMPLER);
 Texture3D<uint1> voxel_indices_mip1 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP1);
 Texture3D<uint1> voxel_indices_mip2 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP2);
 Texture3D<uint1> voxel_indices_mip3 TEXTURE_REGISTER(SLOT_VOXEL_INDICES_MIP3);
@@ -68,6 +68,7 @@ static const float FLT_MIN     = 1.175494351e-38;
 static const float FLT_EPSILON = 1.192092896e-07;
 static const float pi = 3.14159;
 static const float tau = 2 * pi;
+static const int MAX_MIPS = 6;
 
 // Converts a color from sRGB gamma to linear light gamma
 float4 srgb_to_linear(float4 sRGB)
@@ -98,19 +99,19 @@ int3 GameVoxelToTexelFetch(int3 a)
     return int3(a.z, a.y, a.x);
 }
 
-uint GetIndexFromGameVoxelPosition(int3 p)
+uint GetIndexFromGameVoxelPosition(const int3 p, const uint mip)
 {
     int4 game_pos;
     game_pos.xyz = GameVoxelToTexelFetch(p);
-    uint mip = 0;
+#if 1
     float div = float(1 << mip);
     game_pos.x = int(float(game_pos.x) / div);
     game_pos.y = int(float(game_pos.y) / div);
     game_pos.z = int(float(game_pos.z) / div);
+#endif
     game_pos.w = float(mip);
 
     uint voxel_index = voxel_indices.Load(game_pos);
-
     return voxel_index;
 }
 
@@ -181,22 +182,25 @@ void Linecast(  out uint    raycast_color_index,
     float3 tMax = abs((pClose - ray_origin) / ray_direction);
     const float3 tDelta = abs(1.0 / ray_direction);
     int3 voxel_p = int3(floor(p));
-    loop_count = 0;
+    loop_count = 1;
 
     if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
         return;
     if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
         return;
     raycast_normal = normal;
-    raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p);
+    raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, 0);
 
     while (raycast_color_index == 0)
     {
         loop_count++;
+        //TODO: remove this distance check since we dont actually need it
+#if 1
         if (distance(p, ray_origin) > ray_length)
         {
             return;
         }
+#endif
 
         raycast_normal = 0;
         if (tMax.x <= tMax.y && tMax.x <= tMax.z)
@@ -223,7 +227,90 @@ void Linecast(  out uint    raycast_color_index,
             return;
         if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
             return;
-        raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p);
+        raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, 0);
+    }
+
+    const uint comp = (raycast_normal.x != 0.0 ? 0 : (raycast_normal.y != 0.0 ? 1 : 2));
+    const float voxel = ray_direction[comp] < 0 ? float(voxel_p[comp]) + 1.0f : float(voxel_p[comp]);
+    const float t = (voxel - ray_origin[comp]) / ray_direction[comp];
+    raycast_p = ray_origin + ray_direction * t;
+
+    raycast_distance_mag = t;
+}
+
+void Linecast_Mip(  out uint    raycast_color_index,
+                    out float3  raycast_p,
+                    out float   raycast_distance_mag,
+                    out float3  raycast_normal,
+                    out int     loop_count,
+                    const float3    ray_origin,
+                    const float3    ray_direction,
+                    const float     ray_length,
+                    const float3    normal)
+{
+    raycast_color_index = 0;
+    raycast_p = 0;
+    raycast_distance_mag = 0;
+    raycast_normal = 0;
+
+    float3 p = ray_origin;
+    float3 mip_map_size = float3(float(voxel_size.x >> 1), float(voxel_size.y >> 1), float(voxel_size.z >> 1));
+    float3 step_direction;
+    step_direction.x = ray_direction.x >= 0 ? 1.0 : -1.0;
+    step_direction.y = ray_direction.y >= 0 ? 1.0 : -1.0;
+    step_direction.z = ray_direction.z >= 0 ? 1.0 : -1.0;
+    float3 step_size = step_direction * mip_map_size;
+    const float3 pClose = floor((round(ray_origin + (step_direction / 2))));
+    float3 tMax = abs((pClose - ray_origin) / ray_direction);
+    const float3 tDelta = abs(1.0 / ray_direction);
+    int3 voxel_p = int3(floor(p));
+    loop_count = 1;
+
+    if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
+        return;
+    if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
+        return;
+    raycast_normal = normal;
+    raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, 0);
+
+    //for (int mip_level = MAX_MIPS - 1; mip_level >= 0; mip_level--)
+    int mip_level = MAX_MIPS - 1;
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            loop_count++;
+
+            raycast_normal = 0;
+            if (tMax.x <= tMax.y && tMax.x <= tMax.z)
+            {
+                p.x += step_size.x;
+                tMax.x += tDelta.x;
+                raycast_normal.x = -step_direction.x;
+            }
+            else if (tMax.y <= tMax.x && tMax.y <= tMax.z)
+            {
+                p.y += step_size.y;
+                tMax.y += tDelta.y;
+                raycast_normal.y = -step_direction.y;
+            }
+            else
+            {
+                p.z += step_size.z;
+                tMax.z += tDelta.z;
+                raycast_normal.z = -step_direction.z;
+            }
+
+            voxel_p = float3ToVoxelPosition(p);
+            if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
+                break;
+            if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
+                break;
+            raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, mip_level);
+            if (raycast_color_index)
+                break;
+        }
+        mip_map_size *= 0.5;
+        step_size = step_direction * mip_map_size;
     }
 
     const uint comp = (raycast_normal.x != 0.0 ? 0 : (raycast_normal.y != 0.0 ? 1 : 2));
@@ -360,6 +447,17 @@ int RayVsVoxel(out uint      raycast_color_index,
         clamped_ray.z = abs(clamped_ray.z - voxel_size.z) <= 0.0001 ? voxel_size.z - 0.00001 : clamped_ray.z;
         float3 linecast_ray_origin = clamped_ray;
         float3 linecast_ray_direction = ray_direction;
+#if 1
+        Linecast_Mip(raycast_color_index,
+                    raycast_p,
+                    raycast_distance_mag,
+                    raycast_normal,
+                    loop_count,
+                    linecast_ray_origin,
+                    linecast_ray_direction,
+                    1000.0,
+                    aabb_raycast_normal);
+#else
         Linecast(   raycast_color_index,
                     raycast_p,
                     raycast_distance_mag,
@@ -369,6 +467,7 @@ int RayVsVoxel(out uint      raycast_color_index,
                     linecast_ray_direction,
                     1000.0,
                     aabb_raycast_normal);
+#endif
     }
     return loop_count;
 }
@@ -766,7 +865,8 @@ struct PointColor {
             start_hit_voxel_normal,
             next_ray_origin,
             next_ray_direction);
-#if 0 //checking loop count
+//Show loop count
+#if 0
     int loop_count_first = RayVsVoxel(start_hit_voxel_color_index,
             start_hit_voxel_p,
             start_hit_voxel_distance_mag,

@@ -174,11 +174,13 @@ void Linecast(  out uint    raycast_color_index,
     raycast_normal = 0;
 
     float3 p = ray_origin;
-    float3 step;
-    step.x = ray_direction.x >= 0 ? 1.0 : -1.0;
-    step.y = ray_direction.y >= 0 ? 1.0 : -1.0;
-    step.z = ray_direction.z >= 0 ? 1.0 : -1.0;
-    const float3 pClose = floor((round(ray_origin + (step / 2))));
+    float3 individual_voxel_size = float3(1, 1, 1);
+    float3 step_direction;
+    step_direction.x = ray_direction.x >= 0 ? 1.0 : -1.0;
+    step_direction.y = ray_direction.y >= 0 ? 1.0 : -1.0;
+    step_direction.z = ray_direction.z >= 0 ? 1.0 : -1.0;
+    float3 step_size = step_direction * individual_voxel_size;
+    const float3 pClose = floor((round(ray_origin + (step_direction / 2))));
     float3 tMax = abs((pClose - ray_origin) / ray_direction);
     const float3 tDelta = abs(1.0 / ray_direction);
     int3 voxel_p = int3(floor(p));
@@ -205,21 +207,21 @@ void Linecast(  out uint    raycast_color_index,
         raycast_normal = 0;
         if (tMax.x <= tMax.y && tMax.x <= tMax.z)
         {
-            p.x += step.x;
+            p.x += step_size.x;
             tMax.x += tDelta.x;
-            raycast_normal.x = -step.x;
+            raycast_normal.x = -step_direction.x;
         }
         else if (tMax.y <= tMax.x && tMax.y <= tMax.z)
         {
-            p.y += step.y;
+            p.y += step_size.y;
             tMax.y += tDelta.y;
-            raycast_normal.y = -step.y;
+            raycast_normal.y = -step_direction.y;
         }
         else
         {
-            p.z += step.z;
+            p.z += step_size.z;
             tMax.z += tDelta.z;
-            raycast_normal.z = -step.z;
+            raycast_normal.z = -step_direction.z;
         }
 
         voxel_p = float3ToVoxelPosition(p);
@@ -253,8 +255,12 @@ void Linecast_Mip(  out uint    raycast_color_index,
     raycast_distance_mag = 0;
     raycast_normal = 0;
 
+    int starting_mip_level_offset = 2;
     float3 p = ray_origin;
-    float3 mip_map_size = float3(float(voxel_size.x >> 1), float(voxel_size.y >> 1), float(voxel_size.z >> 1));
+    float3 mip_map_size;
+    mip_map_size.x = float(voxel_size.x >> starting_mip_level_offset);
+    mip_map_size.y = float(voxel_size.y >> starting_mip_level_offset);
+    mip_map_size.z = float(voxel_size.z >> starting_mip_level_offset);
     float3 step_direction;
     step_direction.x = ray_direction.x >= 0 ? 1.0 : -1.0;
     step_direction.y = ray_direction.y >= 0 ? 1.0 : -1.0;
@@ -263,20 +269,23 @@ void Linecast_Mip(  out uint    raycast_color_index,
     const float3 pClose = floor((round(ray_origin + (step_direction / 2))));
     float3 tMax = abs((pClose - ray_origin) / ray_direction);
     const float3 tDelta = abs(1.0 / ray_direction);
-    int3 voxel_p = int3(floor(p));
+    int3 voxel_p = float3ToVoxelPosition(p);
     loop_count = 1;
 
-    if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
-        return;
-    if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
-        return;
+    //if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
+    //    return;
+    //if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
+    //    return;
     raycast_normal = normal;
-    raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, 0);
+    raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, MAX_MIPS - starting_mip_level_offset);
 
     //for (int mip_level = MAX_MIPS - 1; mip_level >= 0; mip_level--)
-    int mip_level = MAX_MIPS - 1;
+    int mip_level = MAX_MIPS - starting_mip_level_offset;
+    bool easy_false = true;
+    if (raycast_color_index == 0 && easy_false)
     {
-        for (int i = 0; i < 2; i++)
+        //for (int i = 0; i < 2; i++)
+        int i = 0;
         {
             loop_count++;
 
@@ -302,21 +311,47 @@ void Linecast_Mip(  out uint    raycast_color_index,
 
             voxel_p = float3ToVoxelPosition(p);
             if (voxel_p.x < 0 || voxel_p.y < 0 || voxel_p.z < 0)
-                break;
+                return;//break;
             if (voxel_p.x >= voxel_size.x || voxel_p.y >= voxel_size.y || voxel_p.z >= voxel_size.z)
-                break;
+                return;//break;
             raycast_color_index = GetIndexFromGameVoxelPosition(voxel_p, mip_level);
-            if (raycast_color_index)
-                break;
+            //if (raycast_color_index)
+                //break;
         }
-        mip_map_size *= 0.5;
-        step_size = step_direction * mip_map_size;
+        //mip_map_size *= 0.5;
+        //step_size = step_direction * mip_map_size;
     }
-
     const uint comp = (raycast_normal.x != 0.0 ? 0 : (raycast_normal.y != 0.0 ? 1 : 2));
-    const float voxel = ray_direction[comp] < 0 ? float(voxel_p[comp]) + 1.0f : float(voxel_p[comp]);
-    const float t = (voxel - ray_origin[comp]) / ray_direction[comp];
-    raycast_p = ray_origin + ray_direction * t;
+
+    float voxel;
+    float t;
+#if 0
+    if (comp == 0)//y
+    {
+        voxel = ray_direction.x < 0 ? float(voxel_p.x) + 1 : float(voxel_p.x);
+        t = (voxel - ray_origin.x) / (ray_direction.x);
+        raycast_p = ray_origin + ray_direction * t;
+    }
+    else if (comp == 1)//y
+    {
+        voxel = ray_direction.y < 0 ? float(voxel_p.y) : float(voxel_p.y) + mip_map_size.y;
+        t = (voxel - ray_origin.y) / (ray_direction.y);
+        raycast_p = ray_origin + ray_direction * t;
+    }
+    else
+    {
+        voxel = ray_direction.z < 0 ? float(voxel_p.z) : float(voxel_p.z) + mip_map_size.z;
+        t = (voxel - ray_origin.z) / (ray_direction.z);
+        raycast_p = ray_origin + ray_direction * t;
+    }
+#else
+    {
+        voxel = ray_direction[comp] < 0 ? float(voxel_p[comp]) + 1.0f : float(voxel_p[comp]);
+        t = (voxel - ray_origin[comp]) / (ray_direction[comp]);
+        raycast_p = ray_origin + ray_direction * t;
+    }
+#endif
+
 
     raycast_distance_mag = t;
 }
@@ -447,7 +482,7 @@ int RayVsVoxel(out uint      raycast_color_index,
         clamped_ray.z = abs(clamped_ray.z - voxel_size.z) <= 0.0001 ? voxel_size.z - 0.00001 : clamped_ray.z;
         float3 linecast_ray_origin = clamped_ray;
         float3 linecast_ray_direction = ray_direction;
-#if 1
+#if 0
         Linecast_Mip(raycast_color_index,
                     raycast_p,
                     raycast_distance_mag,
@@ -830,7 +865,7 @@ struct PointColor {
 #elif RAY_METHOD == RAY_LIGHT_DIR_DOT
 
 #define ENABLE_SHADOWS 1
-#define RAY_BOUNCES 3
+#define RAY_BOUNCES 2
 #define RAY_SAMPLES 3
 
     //uint voxel_index = voxel_indices.Load(int4(0, 0, 0, 1));

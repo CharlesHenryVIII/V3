@@ -16,13 +16,16 @@ struct File {
     bool    m_timeIsValid       = false;
     bool    m_binaryDataIsValid = false;
     u64     m_time              = {};
-    std::string     m_filename;
+    std::wstring    m_filename;
     std::string     m_dataString;
     std::vector<u8> m_dataBinary;
 
     File();
-    File(char const* fileName,        File::Mode fileMode, bool createIfNotFound);
-    File(const std::string& fileName, File::Mode fileMode, bool createIfNotFound);
+    //TODO: Change to const char*?
+    File(char const* filename,          File::Mode fileMode, bool createIfNotFound);
+    File(const std::string& filename,   File::Mode fileMode, bool createIfNotFound);
+    File(wchar_t const* filename,       File::Mode fileMode, bool createIfNotFound);
+    File(const std::wstring& filename,  File::Mode fileMode, bool createIfNotFound);
     ~File();
 
     bool Write(const std::string& text);
@@ -41,6 +44,6 @@ private:
     u32  m_openType;
 
     void GetHandle();
-    void Init(const std::string& filename, File::Mode fileMode, bool createIfNotFound);
+    void Init(const std::wstring& filename, File::Mode fileMode, bool createIfNotFound);
     bool FileDestructor();
 };

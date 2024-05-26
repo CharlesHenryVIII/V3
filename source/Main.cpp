@@ -565,11 +565,11 @@ int main(int argc, char* argv[])
             {
                 ZoneScopedN("Cube Render");
                 g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
-                RenderPrimitives();
+                DrawPrimitives();
             }
             {
                 ZoneScopedN("Final Draw");
-                FinalDraw();
+                DrawFinal();
             }
 
             {

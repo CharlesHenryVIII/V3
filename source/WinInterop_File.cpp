@@ -23,26 +23,37 @@ File::File() :
 
 File::File(char const* filename, File::Mode fileMode, bool createIfNotFound)
 {
-    std::string sFileName = std::string(filename);
-    Init(sFileName, fileMode, createIfNotFound);
+    std::wstring wide_string;
+    ConvertMultibyteToWideChar(wide_string, filename);
+    Init(wide_string, fileMode, createIfNotFound);
 }
 
 File::File(const std::string& filename, File::Mode fileMode, bool createIfNotFound)
+{
+    std::wstring wide_string;
+    ConvertMultibyteToWideChar(wide_string, filename);
+    Init(wide_string, fileMode, createIfNotFound);
+}
+
+File::File(wchar_t const* filename, File::Mode fileMode, bool createIfNotFound)
+{
+    std::wstring wide_string = std::wstring(filename);
+    Init(filename, fileMode, createIfNotFound);
+}
+File::File(const std::wstring& filename, File::Mode fileMode, bool createIfNotFound)
 {
     Init(filename, fileMode, createIfNotFound);
 }
 
 void File::GetHandle()
 {
-    //MultiByteToWideChar(CP_UTF8, );
-    //TCHAR* test = TEXT("TEST");
     m_handle = CreateFile(m_filename.c_str(), m_accessType, m_shareType,
         NULL, m_openType, FILE_ATTRIBUTE_NORMAL, NULL);
 }
 
-void File::Init(const std::string& filename, File::Mode fileMode, bool createIfNotFound)
+void File::Init(const std::wstring& filename, File::Mode fileMode, bool createIfNotFound)
 {
-    m_filename = std::string(filename);
+    m_filename = filename;
     m_accessType = GENERIC_READ;
     m_shareType  = FILE_SHARE_READ;
     m_openType   = OPEN_EXISTING;

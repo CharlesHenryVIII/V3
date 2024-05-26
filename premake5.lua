@@ -12,7 +12,7 @@ project "V3"
     targetdir "build/%{cfg.platform}/%{cfg.buildcfg}"
     objdir "build/obj/%{cfg.platform}/%{cfg.buildcfg}"
     editandcontinue "Off"
-    characterset "ASCII"
+    --characterset "ASCII"
     links {
         "SDL2",
         "SDL2main",
@@ -32,6 +32,7 @@ project "V3"
         "contrib/ImGui",
         "contrib/SDL2/include",
         "contrib/tracy-master/public/tracy",
+        "contrib/DirectX-Headers/**"
         --"contrib/GLEW/include",
         --"contrib/GLEW/include/GL",
     }
@@ -54,6 +55,7 @@ project "V3"
         --"contrib/ImGui/backends/imgui_impl_opengl3.*",
         "contrib/ImGui/backends/imgui_impl_sdl2.*",
         "contrib/ImGui/backends/imgui_impl_dx11.*",
+        "contrib/ImGui/backends/imgui_impl_dx12.*",
         --"contrib/ImGui/backends/imgui_impl_opengl3.h",
         --"contrib/ImGui/backends/imgui_impl_opengl3.cpp",
         --"contrib/ImGui/backends/imgui_impl_sdl.h",

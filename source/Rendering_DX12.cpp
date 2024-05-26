@@ -4,7 +4,7 @@
 #include "Vox.h"
 #include "imgui.h"
 #include "ImGui/backends/imgui_impl_sdl2.h"
-#include "ImGui/backends/imgui_impl_dx11.h"
+#include "ImGui/backends/imgui_impl_dx12.h"
 #include "stb/stb_image.h"
 
 #include "SDL.h"
@@ -12,18 +12,25 @@
 #include "Tracy.hpp"
 
 // DirectX
-#include <d3d11.h>
+#include <d3d12.h>
 #include <d3dcompiler.h>
 #include <dxgi.h>
+#include <dxgi1_4.h>
+#include <d3dx12.h>
+#include <dxgidebug.h>
 //#ifdef _MSC_VER
 //#pragma comment(lib, "d3dcompiler") // Automatically link with d3dcompiler.lib as we are using D3DCompile() below.
 //#endif
 
+#if RENDER_PIPELINE == RENDER_PIPELINE_DX12
+
+#define FRAME_TARGET_COUNT 2
+
 Renderer g_renderer;
 
 struct SwapChain {
-    IDXGISwapChain*         handle              = nullptr;
-    ID3D11RenderTargetView* render_target_view  = nullptr;
+    IDXGISwapChain3*        handle              = nullptr;
+    //ID3D12RenderTargetView* render_target_view  = nullptr;
 
     Vec2I   size;
     u32     refresh_rate;
@@ -31,24 +38,50 @@ struct SwapChain {
     u32     sample_quality;
 };
 
-struct DX11Data {
-    ID3D11Device*           device;
-    ID3D11DeviceContext*    device_context;
-    IDXGIFactory*           factory;
-    SwapChain               swap_chain;
-    ID3D11BlendState*       blend_state;
-    ID3D11RasterizerState*  rasterizer_full;
-    ID3D11RasterizerState*  rasterizer_wireframe;
-    ID3D11RasterizerState*  rasterizer_voxel;
-    ID3D11DepthStencilState* depth_stencil_state_depth      = nullptr;
-    ID3D11DepthStencilState* depth_stencil_state_no_depth   = nullptr;
+enum class PipelineState : u32 {
+    Cube_Full,
+    Count,
+};
+ENUMOPS(PipelineState)
 
-    ID3D11RenderTargetView* hdr_rtv = nullptr;
+struct DX12Data {
+    ID3D12Device*           device;
+    //ID3D12DeviceContext*    device_context;
+    IDXGIFactory*           factory;
+    ID3D12CommandAllocator* command_allocator;
+    ID3D12RootSignature*    root_signature;
+    ID3D12PipelineState*    pipeline_state[+PipelineState::Count];
+    ID3D12GraphicsCommandList* command_list;
+    ID3D12CommandQueue*     command_queue;
+
+    ID3D12DescriptorHeap*       rtv_heap;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle;
+
+    //Syncronization objects
+    ID3D12Fence*    fence;
+    UINT64          fence_value;
+    HANDLE          fence_event;
+    //UINT            frame_index;
+
+    D3D12_VIEWPORT          root_signature;
+
+    SwapChain               swap_chain;
+
+    //ID3D12BlendState*       blend_state;
+    //ID3D12RasterizerState*  rasterizer_full;
+    //ID3D12RasterizerState*  rasterizer_wireframe;
+    //ID3D12RasterizerState*  rasterizer_voxel;
+    //ID3D12DepthStencilState* depth_stencil_state_depth      = nullptr;
+    //ID3D12DepthStencilState* depth_stencil_state_no_depth   = nullptr;
+
+    //ID3D12RenderTargetView* hdr_rtv = nullptr;
+    ID3D12Resource*         render_targets[FRAME_TARGET_COUNT];
 
     HRESULT(*D3DCompileFunc)        (LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
     HRESULT(*D3DCompileFromFileFunc)(LPCWSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 };
-static DX11Data s_dx11 = {};
+static DX12Data s_dx12 = {};
 
 template <typename T>
 void SafeRelease(T*& unknown)
@@ -85,9 +118,13 @@ extern "C" {
 
     void ReportDX11References()
     {
-        ID3D11Debug* debug_interface;
-        s_dx11.device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug_interface);
-        HR(debug_interface->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL));
+        IDXGIDebug* debug_interface;
+        HR(DXGIGetDebugInterface(IID_PPV_ARGS(&debug_interface)));
+        if (debug_interface)
+        {
+            debug_interface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+        }
+        SafeRelease(debug_interface);
     }
 #else
     void ReportDX11References() {};
@@ -443,17 +480,39 @@ bool UpdateTexture(Texture** texture, u32 mip_slice, void* data, u32 row_pitch_b
 
 
 
+void WaitForPreviousFrame()
+{
+    // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
+    // This is code implemented as such for simplicity. More advanced samples 
+    // illustrate how to use fences for efficient resource usage.
+
+    // Signal and increment the fence value.
+    const UINT64 fence = s_dx12.fence_value;
+    HR(s_dx12.command_queue->Signal(s_dx12.fence, fence));
+    s_dx12.fence_value++;
+
+    // Wait until the previous frame is finished.
+    if (s_dx12.fence->GetCompletedValue() < fence)
+    {
+        HR(s_dx12.fence->SetEventOnCompletion(fence, s_dx12.fence_event));
+        WaitForSingleObject(s_dx12.fence_event, INFINITE);
+    }
+
+    //s_dx12.frame_index = s_dx12.swap_chain->GetCurrentBackBufferIndex();
+}
+
 
 
 //************
 //Buffer
 //************
 
-struct DX11GpuBuffer : public GpuBuffer
+struct DX12GpuBuffer : public GpuBuffer
 {
     //D3D11_USAGE m_usage = D3D11_USAGE_DYNAMIC;
-    ID3D11Buffer* m_buffer = nullptr;
-    ID3D11ShaderResourceView* structure_resource_view = nullptr;
+    //ID3D12Buffer* m_buffer = nullptr;
+    ID3D12Resource* m_buffer = nullptr;
+    //ID3D12ShaderResourceView* structure_resource_view = nullptr;
     //D3D11_BIND_FLAG m_target = {};
 };
 
@@ -461,7 +520,7 @@ struct DX11GpuBuffer : public GpuBuffer
 //TODO: Clean this up with Type::Vertex = D3D11_BIND_VERTEX_BUFFER
 void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_size, const bool is_byte_format)
 {
-    DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(this);
+    DX12GpuBuffer* buf = reinterpret_cast<DX12GpuBuffer*>(this);
     m_count = count;
     SafeRelease(buf->m_buffer);
     assert(data);
@@ -470,6 +529,7 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
     VALIDATE(count);
     UINT total_bytes = UINT(element_size * count);
     //assert(total_bytes / 16 == 0);
+    D3D12_RESOURCE_DIMENSION resource_dimension;
     UINT buffer_type = 0;
     UINT cpu_access_flags = 0;
     UINT struct_byte_stride = 0;
@@ -478,19 +538,17 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
     switch (buf->m_type)
     {
     case GpuBuffer::Type::Vertex:
-        buffer_type = D3D11_BIND_VERTEX_BUFFER;
+        resource_dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         break;
     case GpuBuffer::Type::Index:
-        buffer_type = D3D11_BIND_INDEX_BUFFER;
+        resource_dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         break;
     case GpuBuffer::Type::Constant:
-        buffer_type = D3D11_BIND_CONSTANT_BUFFER;
-        cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
+        resource_dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         break;
     case GpuBuffer::Type::Structure:
-        cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
-        misc_flags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-        buffer_type = D3D11_BIND_SHADER_RESOURCE;
+        resource_dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        //misc_flags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         assert(!buf->m_is_dymamic);
         struct_byte_stride = element_size;
         break;
@@ -501,74 +559,90 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
     if (!buf->m_buffer)
     {
         {
-            D3D11_BUFFER_DESC desc;
-            desc.ByteWidth = total_bytes;
-            desc.Usage = buf->m_is_dymamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_DEFAULT;
-            desc.BindFlags = buffer_type;
-            desc.CPUAccessFlags = buf->m_is_dymamic ? D3D11_CPU_ACCESS_WRITE | cpu_access_flags : cpu_access_flags;
-            desc.MiscFlags = misc_flags;
-            desc.StructureByteStride = struct_byte_stride;
+            D3D12_HEAP_PROPERTIES heap_props;
+            heap_props.Type = D3D12_HEAP_TYPE_UPLOAD;
+            heap_props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+            heap_props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+            heap_props.CreationNodeMask = 1;
+            heap_props.VisibleNodeMask = 1;
 
-            D3D11_SUBRESOURCE_DATA dx11_data;
-            dx11_data.pSysMem = data;
-            dx11_data.SysMemPitch = memory_pitch;
-            dx11_data.SysMemSlicePitch = 0;
+            D3D12_RESOURCE_DESC desc;
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Alignment = 0;
+            desc.Width = total_bytes;
+            desc.Height = 1;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.Format = DXGI_FORMAT_UNKNOWN;
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-            HR(s_dx11.device->CreateBuffer(
-                &desc,          //[in]            const D3D11_BUFFER_DESC * pDesc,
-                &dx11_data,     //[in, optional]  const D3D11_SUBRESOURCE_DATA * pInitialData,
-                &buf->m_buffer  //[out, optional] ID3D11Buffer * *ppBuffer
-            ));
+
+            HR(s_dx12.device->CreateCommittedResource(heap_props, D3D12_HEAP_FLAG_NONE, desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&buf->m_buffer)));
+
+            // Copy the triangle data to the vertex buffer.
+            UINT8* pVertexDataBegin;
+            D3D12_RANGE read_range;
+            HR(buf->m_buffer->Map(0, &read_range, reinterpret_cast<void**>(&pVertexDataBegin)));
+            memcpy(pVertexDataBegin, data, total_bytes);
+            buf->m_buffer->Unmap(0, nullptr);
+
+            // Initialize the vertex buffer view.
+            D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
+            vertex_buffer_view.BufferLocation = buf->m_buffer->GetGPUVirtualAddress();
+            vertex_buffer_view.StrideInBytes = element_size;
+            vertex_buffer_view.SizeInBytes = total_bytes;
         }
         DEBUG_LOG("Created and Uploaded data to gpu buffer: element: %i size: %i", element_size, count);
 
-        if (buf->m_type == GpuBuffer::Type::Structure)
-        {
-            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-            ZeroMemory(&desc, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
-            desc.Format = is_byte_format ? DXGI_FORMAT_R8_UINT : DXGI_FORMAT_UNKNOWN;
-            desc.ViewDimension = D3D_SRV_DIMENSION_BUFFER;
-            desc.Buffer.FirstElement = 0;
-            desc.Buffer.NumElements = (UINT)count;
-            HR(s_dx11.device->CreateShaderResourceView(
-                buf->m_buffer,                  //[in]            ID3D11Resource * pResource,
-                &desc,                          //[in, optional]  const D3D11_SHADER_RESOURCE_VIEW_DESC * pDesc,
-                &buf->structure_resource_view   //[out, optional] ID3D11ShaderResourceView * *ppSRView
-            ));
-        }
+        //if (buf->m_type == GpuBuffer::Type::Structure)
+        //{
+        //    D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+        //    ZeroMemory(&desc, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
+        //    desc.Format = is_byte_format ? DXGI_FORMAT_R8_UINT : DXGI_FORMAT_UNKNOWN;
+        //    desc.ViewDimension = D3D_SRV_DIMENSION_BUFFER;
+        //    desc.Buffer.FirstElement = 0;
+        //    desc.Buffer.NumElements = (UINT)count;
+        //    HR(s_dx11.device->CreateShaderResourceView(
+        //        buf->m_buffer,                  //[in]            ID3D11Resource * pResource,
+        //        &desc,                          //[in, optional]  const D3D11_SHADER_RESOURCE_VIEW_DESC * pDesc,
+        //        &buf->structure_resource_view   //[out, optional] ID3D11ShaderResourceView * *ppSRView
+        //    ));
+        //}
 
         return;
     }
 
-    if (buf->m_is_dymamic)
-    {
-        //map/unmap/memcopy
-        D3D11_MAPPED_SUBRESOURCE resource;
-        ZeroMemory(&resource, sizeof(D3D11_MAPPED_SUBRESOURCE));
-        HR(s_dx11.device_context->Map(
-            buf->m_buffer,          //[in]            ID3D11Resource * pResource,
-            0,                      //[in]            UINT                     Subresource,
-            D3D11_MAP_WRITE_DISCARD,//[in]            D3D11_MAP                MapType,
-            0,                      //[in]            UINT                     MapFlags,
-            &resource               //[out, optional] D3D11_MAPPED_SUBRESOURCE * pMappedResource
-        ));
-        memcpy(resource.pData, data, element_size * count);
-        s_dx11.device_context->Unmap(buf->m_buffer, 0);
-        DEBUG_LOG("Uploaded dynamic_buffer data to gpu buffer: element: %i size: %i", element_size, count);
-    }
-    else
-    {
-        s_dx11.device_context->UpdateSubresource(
-            buf->m_buffer,  //[in]           ID3D11Resource * pDstResource,
-            0,              //[in]           UINT            DstSubresource,
-            NULL,           //[in, optional] const D3D11_BOX * pDstBox,
-            data,           //[in]           const void* pSrcData,
-            total_bytes,    //[in]           UINT            SrcRowPitch,
-            0               //[in]           UINT            SrcDepthPitch
-        );
-        DEBUG_LOG("Uploaded default_buffer data to gpu buffer: element: %i size: %i", element_size, count);
-    }
-
+    //if (buf->m_is_dymamic)
+    //{
+    //    //map/unmap/memcopy
+    //    D3D11_MAPPED_SUBRESOURCE resource;
+    //    ZeroMemory(&resource, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    //    HR(s_dx11.device_context->Map(
+    //        buf->m_buffer,          //[in]            ID3D11Resource * pResource,
+    //        0,                      //[in]            UINT                     Subresource,
+    //        D3D11_MAP_WRITE_DISCARD,//[in]            D3D11_MAP                MapType,
+    //        0,                      //[in]            UINT                     MapFlags,
+    //        &resource               //[out, optional] D3D11_MAPPED_SUBRESOURCE * pMappedResource
+    //    ));
+    //    memcpy(resource.pData, data, element_size * count);
+    //    s_dx11.device_context->Unmap(buf->m_buffer, 0);
+    //    DEBUG_LOG("Uploaded dynamic_buffer data to gpu buffer: element: %i size: %i", element_size, count);
+    //}
+    //else
+    //{
+    //    s_dx11.device_context->UpdateSubresource(
+    //        buf->m_buffer,  //[in]           ID3D11Resource * pDstResource,
+    //        0,              //[in]           UINT            DstSubresource,
+    //        NULL,           //[in, optional] const D3D11_BOX * pDstBox,
+    //        data,           //[in]           const void* pSrcData,
+    //        total_bytes,    //[in]           UINT            SrcRowPitch,
+    //        0               //[in]           UINT            SrcDepthPitch
+    //    );
+    //    DEBUG_LOG("Uploaded default_buffer data to gpu buffer: element: %i size: %i", element_size, count);
+    //}
 }
 
 void GpuBuffer::Bind(u32 slot, GpuBuffer::BindLocation binding)
@@ -625,7 +699,7 @@ bool CreateGpuBuffer(GpuBuffer** buffer, const char* name, bool is_dynamic, GpuB
 {
     assert(buffer);
     assert(*buffer == nullptr);
-    DX11GpuBuffer* buf = new DX11GpuBuffer;
+    DX12GpuBuffer* buf = new DX12GpuBuffer;
     buf->m_is_dymamic = is_dynamic;
     buf->m_type = type;
     strcpy(buf->m_name, name);
@@ -695,33 +769,37 @@ struct DX11IncludeManager : ID3DInclude
 };
 
 
-struct DX11Shader : public Shader
+struct DX12Shader : public Shader
 {
-    //D3D11_USAGE m_usage = D3D11_USAGE_DYNAMIC;
-    ID3D11Buffer* m_buffer = nullptr;
-    ID3D11ShaderResourceView* structure_resource_view = nullptr;
-    ID3D11InputLayout* m_vertex_input_layout = nullptr;
-    ID3D11VertexShader* m_vertex_shader = nullptr;
-    ID3D11PixelShader* m_pixel_shader = nullptr;
-    static const u32 m_vertex_component_max = 4;
-    D3D11_INPUT_ELEMENT_DESC m_local_layout[m_vertex_component_max] = {};
+    ID3DBlob* m_vertex_blob;
+    ID3DBlob* m_pixel_blob;
 
-    //D3D11_BIND_FLAG m_target = {};
+    D3D12_INPUT_ELEMENT_DESC m_local_layout[m_vertex_component_max] = {};
+
+    ////D3D11_USAGE m_usage = D3D11_USAGE_DYNAMIC;
+    //ID3D11Buffer* m_buffer = nullptr;
+    //ID3D11ShaderResourceView* structure_resource_view = nullptr;
+    //ID3D11InputLayout* m_vertex_input_layout = nullptr;
+    //ID3D11VertexShader* m_vertex_shader = nullptr;
+    //ID3D11PixelShader* m_pixel_shader = nullptr;
+    //static const u32 m_vertex_component_max = 4;
+
+    ////D3D11_BIND_FLAG m_target = {};
 };
 
 bool CreateShader(Shader** s,
-    const std::string& vertexFileLocation,
-    const std::string& pixelFileLocation,
+    const std::string& vertex_filename,
+    const std::string& pixel_filename,
     Shader::InputElementDesc* input_layout,
     i32 layout_count)
 {
     assert(s);
     assert(*s == nullptr);
-    DX11Shader* shader = new DX11Shader;
-    (*s) = reinterpret_cast<DX11Shader*>(shader);
+    DX12Shader* shader = new DX12Shader;
+    (*s) = reinterpret_cast<DX12Shader*>(shader);
 
-    shader->m_vertexFile = vertexFileLocation;
-    shader->m_pixelFile = pixelFileLocation;
+    ConvertMultibyteToWideChar(shader->m_vertex_filename, vertex_filename);
+    ConvertMultibyteToWideChar(shader->m_pixel_filename, pixel_filename);
 
     shader->m_vertex_component_count = layout_count;
     for (u32 i = 0; i < shader->m_vertex_component_count; i++)
@@ -732,7 +810,7 @@ bool CreateShader(Shader** s,
         .Format = DXGI_FORMAT(input_layout[i].Format),
         .InputSlot = 0,
         .AlignedByteOffset = input_layout[i].AlignedByteOffset,
-        .InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA,
+        .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
         .InstanceDataStepRate = 0,
         };
 
@@ -743,15 +821,17 @@ bool CreateShader(Shader** s,
 }
 Shader::~Shader()
 {
-    DX11Shader* shader = reinterpret_cast<DX11Shader*>(this);
-    SafeRelease(shader->m_vertex_shader);
-    SafeRelease(shader->m_pixel_shader);
-    SafeRelease(shader->m_vertex_input_layout);
+    DX12Shader* shader = reinterpret_cast<DX12Shader*>(this);
+    //SafeRelease(shader->m_vertex_shader);
+    SafeRelease(shader->m_vertex_blob);
+    //SafeRelease(shader->m_pixel_shader);
+    SafeRelease(shader->m_pixel_blob);
+    //SafeRelease(shader->m_vertex_input_layout);
     DEBUG_LOG("Shader Program Deleted\n");
 }
-bool Shader::CompileShader(std::string text, const std::string& file_name, Type shader_type)
+bool Shader::CompileShader(const std::wstring& file_name, Type shader_type)
 {
-    DX11Shader* shader = reinterpret_cast<DX11Shader*>(this);
+    DX12Shader* shader = reinterpret_cast<DX12Shader*>(this);
     bool failed = false;
 #if 1
     D3D_SHADER_MACRO* shader_macros = nullptr;
@@ -761,40 +841,20 @@ bool Shader::CompileShader(std::string text, const std::string& file_name, Type 
     };
 #endif
 
-    //WideCharToMultiByte
-    i32 char_count = MultiByteToWideChar(
-        CP_UTF8,                //[in]            UINT                              CodePage,
-        MB_ERR_INVALID_CHARS,   //[in]            DWORD                             dwFlags,
-        file_name.c_str(),      //[in]            _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
-        -1,                     //[in]            int                               cbMultiByte,
-        nullptr,                //[out, optional] LPWSTR                            lpWideCharStr,
-        0                       //[in]            int                               cchWideChar
-    );
-    i32 wide_char_count = char_count;// = char_count / 2;
-    WCHAR* wide_char = new WCHAR[wide_char_count];
-    //memset(wide_char, '\0', wide_char_count);
-    i32 wide_char_actual = MultiByteToWideChar(
-        CP_UTF8,                //[in]            UINT                              CodePage,
-        MB_ERR_INVALID_CHARS,   //[in]            DWORD                             dwFlags,
-        file_name.c_str(),      //[in]            _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
-        -1,                     //[in]            int                               cbMultiByte,
-        wide_char,              //[out, optional] LPWSTR                            lpWideCharStr,
-        wide_char_count         //[in]            int                               cchWideChar
-    );
-    assert(wide_char_actual > 0);
-    assert(wide_char_actual == wide_char_count);
-
     std::string entry_point;
     std::string target_version;
+    ID3DBlob** shader_blob;
     switch (shader_type)
     {
     case Type_Vertex:
         entry_point = "Vertex_Main";
-        target_version = "vs_4_0";
+        target_version = "vs_5_0";
+        *shader_blob = shader->m_vertex_blob;
         break;
     case Type_Pixel:
         entry_point = "Pixel_Main";
-        target_version = "ps_4_0";
+        target_version = "ps_5_0";
+        *shader_blob = shader->m_pixel_blob;
         break;
     default:
         FAIL;
@@ -806,74 +866,49 @@ bool Shader::CompileShader(std::string text, const std::string& file_name, Type 
 #if _DEBUG
     //;
     flags1 |= D3DCOMPILE_DEBUG;
-#if 0
-    flags1 |= D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_OPTIMIZATION_LEVEL0;
-    //flags1 |= D3DCOMPILE_SKIP_VALIDATION; //dont do this
-#else
-    flags1 |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-#endif
 #endif
 
-    ID3DBlob* code;
+    //Create Blob
+    SafeRelease(*shader_blob);
     ID3DBlob* errors;
     DX11IncludeManager include_manager;
-    HRESULT compile_result = s_dx11.D3DCompileFromFileFunc(
-        wide_char,              //[in]            LPCWSTR                pFileName,
-        shader_macros,          //[in, optional]  const D3D_SHADER_MACRO *pDefines,
-        &include_manager,  //[in, optional]  ID3DInclude            *pInclude,
-        entry_point.c_str(),    //[in]            LPCSTR                 pEntrypoint,
-        target_version.c_str(), //[in]            LPCSTR                 pTarget,
-        flags1,                 //[in]            UINT                   Flags1,
-        0,                      //[in]            UINT                   Flags2,
-        &code,                  //[out]           ID3DBlob               **ppCode,
-        &errors                 //[out, optional] ID3DBlob               **ppErrorMsgs
+    HRESULT compile_result = s_dx12.D3DCompileFromFileFunc(
+        m_vertex_filename.c_str(),  //[in]            LPCWSTR                pFileName,
+        shader_macros,              //[in, optional]  const D3D_SHADER_MACRO *pDefines,
+        &include_manager,           //[in, optional]  ID3DInclude            *pInclude,
+        entry_point.c_str(),        //[in]            LPCSTR                 pEntrypoint,
+        target_version.c_str(),     //[in]            LPCSTR                 pTarget,
+        flags1,                     //[in]            UINT                   Flags1,
+        0,                          //[in]            UINT                   Flags2,
+        shader_blob,                //[out]           ID3DBlob               **ppCode,
+        &errors                     //[out, optional] ID3DBlob               **ppErrorMsgs
     );
-    delete wide_char;
-    failed = !code || !!errors || FAILED(compile_result);
 
-    if (!failed)
+    if (!shader_blob || !!errors || FAILED(compile_result))
     {
-        SafeRelease(errors);
-        switch (shader_type)
+        std::wstring info_string;
+        info_string.resize(errors->GetBufferSize());
+        memcpy(info_string.data(), errors->GetBufferPointer(), errors->GetBufferSize());
+        std::wstring error_title = m_vertex_filename.c_str();
+        error_title += L" Compilation Error: ";
+        DebugPrint((error_title + info_string + L"\n").c_str());
+
+        SDL_MessageBoxButtonData buttons[] = {
+            //{ /* .flags, .buttonid, .text */        0, 0, "Continue" },
+            { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Retry" },
+            { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 1, "Continue" },
+        };
+
+        i32 buttonID = CreateMessageWindow(buttons, arrsize(buttons), MessageBoxType::Error, error_title.c_str(), info_string.c_str());
         {
-        case Type_Vertex:
-            SafeRelease(shader->m_vertex_shader);
-            if (FAILED(s_dx11.device->CreateVertexShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &shader->m_vertex_shader)))
+            if (buttons[buttonID].buttonid == 0)//NOTE: Retry button
             {
-                FAIL;
-                SafeRelease(code);
-                SafeRelease(errors);
-                failed = true;
+                CheckForUpdate();
             }
-            else
+            else if (buttons[buttonID].buttonid == 1)//NOTE: Continue button
             {
-                // Create the input layout
-                if (FAILED(s_dx11.device->CreateInputLayout(
-                    shader->m_local_layout,             //[in]            const D3D11_INPUT_ELEMENT_DESC *pInputElementDescs,
-                    shader->m_vertex_component_count,   //[in]            UINT                           NumElements,
-                    code->GetBufferPointer(),           //[in]            const void                     *pShaderBytecodeWithInputSignature,
-                    code->GetBufferSize(),              //[in]            SIZE_T                         BytecodeLength,
-                    &shader->m_vertex_input_layout      //[out, optional] ID3D11InputLayout              **ppInputLayout
-                )))
-                {
-                    FAIL;
-                    failed = true;
-                }
-                SafeRelease(code);
+                return;
             }
-            break;
-        case Type_Pixel:
-            SafeRelease(shader->m_pixel_shader);
-            if (FAILED(s_dx11.device->CreatePixelShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &shader->m_pixel_shader)))
-            {
-                FAIL;
-                SafeRelease(code);
-                SafeRelease(errors);
-                failed = true;
-            }
-            break;
-        default:
-            FAIL;
         }
     }
 
@@ -889,41 +924,8 @@ bool Shader::CompileShader(std::string text, const std::string& file_name, Type 
         m_reference_file_names.push_back(include_manager.m_included_shader_files[i]);
         m_reference_file_times.push_back(0);
     }
-    postloops:
+postloops:
 
-    if (failed)
-    {
-        std::string info_string;
-        info_string.resize(errors->GetBufferSize());
-        memcpy(info_string.data(), errors->GetBufferPointer(), errors->GetBufferSize());
-        std::string error_title = file_name + " Compilation Error: ";
-        DebugPrint((error_title + info_string + "\n").c_str());
-
-        SDL_MessageBoxButtonData buttons[] = {
-            //{ /* .flags, .buttonid, .text */        0, 0, "Continue" },
-            { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Retry" },
-            { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 1, "Continue" },
-        };
-
-        i32 buttonID = CreateMessageWindow(buttons, arrsize(buttons), MessageBoxType::Error, error_title.c_str(), info_string.c_str());
-        //if (buttons[buttonID].buttonid == 2)//NOTE: Stop button
-        //{
-        //    DebugPrint("stop hit");
-        //    g_running = false;
-        //    return false;
-        //}
-        //else
-        {
-            if (buttons[buttonID].buttonid == 0)//NOTE: Retry button
-            {
-                CheckForUpdate();
-            }
-            else if (buttons[buttonID].buttonid == 1)//NOTE: Continue button
-            {
-                return false;
-            }
-        }
-    }
     DEBUG_LOG("Shader Vertex/Fragment Created\n");
     return true;
 }
@@ -944,25 +946,19 @@ void GetShaderReferenceFileTimes(std::vector<u64>& out, Shader* p)
 
 void Shader::CheckForUpdate()
 {
-    std::string vertexText;
     u64 vertexFileTime;
-    std::string pixelText;
     u64 pixelFileTime;
     std::vector<u64> referenced_file_times;
     {
 
-        File vertexFile(m_vertexFile, File::Mode::Read, false);
+        File vertexFile(m_vertex_filename, File::Mode::Read, false);
         vertexFile.GetTime();
         VALIDATE(vertexFile.m_timeIsValid);
-        vertexFile.GetText();
-        vertexText = vertexFile.m_dataString;
         vertexFileTime = vertexFile.m_time;
 
-        File pixelFile(m_pixelFile, File::Mode::Read, false);
+        File pixelFile(m_pixel_filename, File::Mode::Read, false);
         pixelFile.GetTime();
         VALIDATE(pixelFile.m_timeIsValid);
-        pixelFile.GetText();
-        pixelText = pixelFile.m_dataString;
         pixelFileTime = pixelFile.m_time;
 
         GetShaderReferenceFileTimes(referenced_file_times, this);
@@ -983,8 +979,8 @@ void Shader::CheckForUpdate()
         m_pixelLastWriteTime  < pixelFileTime)
     {
         //Compile shaders and link to program
-        if (!CompileShader(vertexText, m_vertexFile, Type_Vertex) ||
-            !CompileShader(pixelText, m_pixelFile, Type_Pixel))
+        if (!CompileShader(m_vertex_filename, Type_Vertex) ||
+            !CompileShader(m_pixel_filename, Type_Pixel))
             return;
 
         DEBUG_LOG("Shader Created\n");
@@ -1014,7 +1010,7 @@ void Shader::CheckForUpdate()
 
 
 
-void CreateRenderTargetView(ID3D11RenderTargetView** rtv, DXGI_FORMAT format, ID3D11Texture2D* texture)
+void CreateRenderTargetView(ID3D12RenderTargetView** rtv, DXGI_FORMAT format, ID3D11Texture2D* texture)
 {
     assert(rtv);
     if (*rtv)
@@ -1042,32 +1038,6 @@ void CreateRenderTargetView(ID3D11RenderTargetView** rtv, Texture::Index texture
 }
 
 
-void FillIndexBuffer(GpuBuffer* ib, size_t count)
-{
-    if (ib->m_count > count)
-        return;
-    std::vector<u32> arr;
-
-    //size_t amount = VOXEL_MAX_SIZE * VOXEL_MAX_SIZE * VOXEL_MAX_SIZE * 6 * 6;
-    size_t amount = 6 * count;
-    arr.reserve(amount);
-    i32 baseIndex = 0;
-    for (i32 i = 0; i < amount; i += 6)
-
-    {
-        arr.push_back(baseIndex + 0);
-        arr.push_back(baseIndex + 1);
-        arr.push_back(baseIndex + 2);
-        arr.push_back(baseIndex + 1);
-        arr.push_back(baseIndex + 3);
-        arr.push_back(baseIndex + 2);
-
-        baseIndex += 4; //Amount of vertices
-    }
-
-    ib->Upload(arr.data(), amount, sizeof(baseIndex));
-}
-
 typedef HRESULT(*D3DCompileFunc)        (LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 typedef HRESULT(*D3DCompileFromFileFunc)(LPCWSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 
@@ -1090,7 +1060,19 @@ void InitializeImGui()
 
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForD3D(g_renderer.SDL_Context);
-    ImGui_ImplDX11_Init(s_dx11.device, s_dx11.device_context);
+    //ImGui_ImplDX11_Init(s_dx12.device, s_dx11.device_context);
+    //D3D12_CPU_DESCRIPTOR_HANDLE desc_handle;
+
+
+    //ImGui_ImplDX12_Init(
+    //ID3D12Device* device, 
+    //int num_frames_in_flight, 
+    //DXGI_FORMAT rtv_format, 
+    //ID3D12DescriptorHeap* cbv_srv_heap, 
+    //D3D12_CPU_DESCRIPTOR_HANDLE font_srv_cpu_desc_handle, 
+    //D3D12_GPU_DESCRIPTOR_HANDLE font_srv_gpu_desc_handle);
+
+    ImGui_ImplDX12_Init(s_dx12.device, FRAME_TARGET_COUNT, DXGI_FORMAT_R8G8B8A8_UNORM, s_dx12.rtv_heap, s_dx12.rtv_handle, s_dx12.gpu_handle);
 
     // Load Fonts
     // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
@@ -1199,31 +1181,68 @@ void InitializeVideo()
     HWND hwnd = wmInfo.info.win.window;
 
 
+
+    //
+    // INIT DX12
+    //
+
+
+
+    //Enable DX12 Debug Layer
+#ifdef _DEBUG
     {
-#if 0
-        //Do we need to really do this?
-        {
-            IDXGIFactory* factory;
-            VERIFY(SUCCEEDED(CreateDXGIFactory(IID_PPV_ARGS(&factory))));
-            assert(factory);
-            IDXGIAdapter* aOutput;
-            for (UINT i = 0; factory->EnumAdapters(i, &aOutput) != DXGI_ERROR_NOT_FOUND; i++)
-            {
-                DXGI_ADAPTER_DESC desc;
-                HR(aOutput->GetDesc(&desc));
-                desc.Description;
-                UINT id = desc.VendorId;
-            }
-        }
+        ID3D12Debug* debug_controller;
+        HR(D3D12GetDebugInterface(IID_PPV_ARGS(&debug_controller)));
+        if (debug_controller)
+            debug_controller->EnableDebugLayer();
+
+        SafeRelease(debug_controller);
+    }
 #endif
 
 
+    // Get factory and create device
 
-        UINT flags = 0;
-//#if _DEBUG
-        flags |= D3D11_CREATE_DEVICE_DEBUG;
-//#endif
+    HR(CreateDXGIFactory(IID_PPV_ARGS(&s_dx12.factory)));
+    //GetHardwareAdapter(s_dx12.factory, hardware_adapter);
+    IDXGIAdapter* hardware_adapter = nullptr;
+    {
+        for (UINT i = 0; ; i++)
+        {
+            IDXGIAdapter* adapter = nullptr;
+            if (DXGI_ERROR_NOT_FOUND == s_dx12.factory->EnumAdapters(i, &adapter))
+            {
+                // No more adapters to enumerate.
+                break;
+            }
+            // Check to see if the adapter supports Direct3D 12, but don't create the
+            // actual device yet.
+            if (SUCCEEDED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr)))
+            {
+                hardware_adapter = adapter;
+                break;
+            }
+            SafeRelease(adapter);
+        }
 
+    }
+    assert(hardware_adapter);
+    HR(D3D12CreateDevice(hardware_adapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&s_dx12.device)));
+
+
+    //Create the command queue.
+    ID3D12CommandQueue* command_queue;
+    {
+        D3D12_COMMAND_QUEUE_DESC desc = {};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+        HR(s_dx12.device->CreateCommandQueue(&desc, IID_PPV_ARGS(&command_queue)));
+    }
+
+
+    //Create the swap chain
+    {
         DXGI_RATIONAL refresh_rate;
         refresh_rate.Numerator = g_renderer.refresh_rate;
         refresh_rate.Denominator = 1;
@@ -1243,258 +1262,171 @@ void InitializeVideo()
             dxgi_mode_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
         }
 
+        //MSAA
         DXGI_SAMPLE_DESC dxgi_sample_desc;
         {
-            //MSAA
-            dxgi_sample_desc.Count      = 1;
-            dxgi_sample_desc.Quality    = 0;
+            dxgi_sample_desc.Count = 1;
+            dxgi_sample_desc.Quality = 0;
         }
 
         DXGI_SWAP_CHAIN_DESC swap_chain_desc;
         swap_chain_desc.BufferDesc = dxgi_mode_desc;
         swap_chain_desc.SampleDesc = dxgi_sample_desc;
+        //WARNING: Does this need to be only DXGI_USAGE_RENDER_TARGET_OUTPUT?
         swap_chain_desc.BufferUsage = DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        swap_chain_desc.BufferCount = 2; //is this right?
+        swap_chain_desc.BufferCount = FRAME_TARGET_COUNT; //is this right?
         swap_chain_desc.OutputWindow = hwnd;
         swap_chain_desc.Windowed = TRUE;
+        //TODO: Change to DXGI_SWAP_EFFECT_FLIP_DISCARD
         swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL; //Does not work with MSAA
         swap_chain_desc.Flags = 0; //do we need this?  DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
 
-        const D3D_FEATURE_LEVEL feature_levels[]= { D3D_FEATURE_LEVEL_11_0 };
-        IDXGISwapChain*         swap_chain      = nullptr;
-        D3D_FEATURE_LEVEL       feature_level   = {};
-        ID3D11DeviceContext*    temp_context    = nullptr;
-
-        HR(D3D11CreateDeviceAndSwapChain(
-            nullptr,                    //[in, optional]  IDXGIAdapter               *pAdapter,
-            D3D_DRIVER_TYPE_HARDWARE,   //                D3D_DRIVER_TYPE            DriverType,
-            NULL,                       //                HMODULE                    Software,
-            flags,                      //                UINT                       Flags,
-            feature_levels,             //[in, optional]  const D3D_FEATURE_LEVEL    *pFeatureLevels,
-            arrsize(feature_levels),    //                UINT                       FeatureLevels,
-            D3D11_SDK_VERSION,          //                UINT                       SDKVersion,
-            &swap_chain_desc,           //[in, optional]  const DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
-            &swap_chain,                //[out, optional] IDXGISwapChain             **ppSwapChain,
-            &s_dx11.device,                    //[out, optional] ID3D11Device               **ppDevice,
-            &feature_level,             //[out, optional] D3D_FEATURE_LEVEL          *pFeatureLevel,
-            &temp_context               //[out, optional] ID3D11DeviceContext        **ppImmediateContext
-        ));
-        assert(s_dx11.device); //FATAL
-
-        VERIFY(SUCCEEDED(temp_context->QueryInterface(IID_PPV_ARGS(&s_dx11.device_context))));
-        temp_context->Release();
-
-        s_dx11.swap_chain.handle = swap_chain;
-        UpdateSwapchain(g_renderer.size);
-
-        // Get factory from device
-        IDXGIDevice*    pDXGIDevice  = nullptr;
-        IDXGIAdapter*   pDXGIAdapter = nullptr;
-        IDXGIFactory*   pFactory     = nullptr;
-
-        if (SUCCEEDED(s_dx11.device->QueryInterface(IID_PPV_ARGS(&pDXGIDevice))))
-            if (SUCCEEDED(pDXGIDevice->GetParent(IID_PPV_ARGS(&pDXGIAdapter))))
-                if (SUCCEEDED(pDXGIAdapter->GetParent(IID_PPV_ARGS(&pFactory))))
-                {
-                    s_dx11.factory         = pFactory;
-                }
-        if (pDXGIDevice) pDXGIDevice->Release();
-        if (pDXGIAdapter) pDXGIAdapter->Release();
-        s_dx11.device->AddRef();
-        s_dx11.device_context->AddRef();
+        //HR(s_dx12.factory->CreateSwapChain(
+        //    command_queue,        // Swap chain needs the queue so that it can force a flush on it.
+        //    &swap_chain_desc,
+        //    &s_dx12.swap_chain.handle));
+        IDXGISwapChain* swap_chain1;
+        HR(s_dx12.factory4->CreateSwapChain(
+            command_queue,        // Swap chain needs the queue so that it can force a flush on it.
+            &swap_chain_desc,
+            &swap_chain1));
+        //TODO: Add error checking for failing to get IDXGISwapChain3
+        HR(swap_chain1->QueryInterface(&s_dx12.swap_chain.handle));
     }
 
+    UINT frame_index = s_dx12.swap_chain.handle->GetCurrentBackBufferIndex();
+
+    // Create descriptor heaps.
+    UINT rtv_descriptor_size;
     {
-        HINSTANCE dll_instance = LoadLibrary("d3dcompiler_47.dll");
+        // Describe and create a render target view (RTV) descriptor heap.
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.NumDescriptors = FRAME_TARGET_COUNT;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        HR(s_dx12.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&s_dx12.rtv_heap)));
+
+        rtv_descriptor_size = s_dx12.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    }
+
+    // Create frame resources.
+    {
+        s_dx12.rtv_handle = s_dx12.rtv_heap->GetCPUDescriptorHandleForHeapStart();
+
+        // Create a RTV for each frame.
+        for (UINT i = 0; i < FRAME_TARGET_COUNT; i++)
+        {
+            //s_dx12.device->CreateRenderTargetView()
+            //CreateRenderTargetView(&s_dx11.hdr_rtv, Texture::Index_Backbuffer_HDR);
+            HR(s_dx12.swap_chain.handle->GetBuffer(i, IID_PPV_ARGS(&s_dx12.render_targets[i])));
+            s_dx12.device->CreateRenderTargetView(s_dx12.render_targets[i], nullptr, s_dx12.rtv_handle);
+            //s_dx12.rtv_handle.Offset(1, rtv_descriptor_size);
+            s_dx12.rtv_handle.ptr = SIZE_T(INT64(s_dx12.rtv_handle.ptr) + INT64(1) * INT64(rtv_descriptor_size)):
+        }
+    }
+    {
+        //THIS IS CURRENTLY ONLY USED BY IMGUI...
+        // WHAT IS THIS !?
+        s_dx12.gpu_handle = s_dx12.rtv_heap->GetGPUDescriptorHandleForHeapStart();
+    }
+
+    HR(s_dx12.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&s_dx12.command_allocator)));
+
+    {
+        HINSTANCE dll_instance = LoadLibrary(L"d3dcompiler_47.dll");
         VALIDATE(dll_instance);
-        s_dx11.D3DCompileFunc          = (D3DCompileFunc)GetProcAddress(dll_instance, "D3DCompile");
-        s_dx11.D3DCompileFromFileFunc  = (D3DCompileFromFileFunc)GetProcAddress(dll_instance, "D3DCompileFromFile");
+        s_dx12.D3DCompileFunc          = (D3DCompileFunc)GetProcAddress(dll_instance, "D3DCompile");
+        s_dx12.D3DCompileFromFileFunc  = (D3DCompileFromFileFunc)GetProcAddress(dll_instance, "D3DCompileFromFile");
     }
 
-#if 0 //Unsure if this is needed for creating window with SDL and D3D11
-    SDL_Renderer* renderer = nullptr;
-    for (i32 i = 0; i < SDL_GetNumRenderDrivers(); i++)
+
+
+    //
+    // LOAD ASSETS
+    //
+
+    
+    // Create an empty root signature.
     {
-        SDL_RendererInfo rendererInfo = {};
-        SDL_GetRenderDriverInfo(i, &rendererInfo);
-        if (rendererInfo.name == std::string("direct3d11"))
-        {
-            renderer = SDL_CreateRenderer(g_renderer.SDL_Context, i, 0);
-        }
+        CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+        rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-        break;
+        ID3DBlob* signature;
+        ID3DBlob* error;
+        HR(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
+        HR(s_dx12.device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&s_dx12.root_signature)));
     }
-#endif
 
-#if 0 //OpenGL code
-    /* This makes our buffer swap syncronized with the monitor's vertical refresh */
-    SDL_GL_SetSwapInterval(g_renderer.swapInterval);
-#endif
+    //Compile shader
+    InitializeData(s_dx12.swap_chain.size);
 
-    //Create Textures:
-    CreateTexture(&g_renderer.textures[Texture::Index_Minecraft], "assets/MinecraftSpriteSheet20120215Modified.png", Texture::Format_R8G8B8A8_UNORM_SRGB, Texture::Filter_Point);
-    u8 pixel_texture_data[] = { 255, 255, 255, 255 };
-    CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1, 0 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
-    CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
+    D3D12_RASTERIZER_DESC rasterizer_full;
+    // Create the rasterizer state
+    {
+        ZeroMemory(&rasterizer_full, sizeof(rasterizer_full));
+
+        rasterizer_full.FillMode = D3D12_FILL_MODE_SOLID;
+        rasterizer_full.CullMode = D3D12_CULL_MODE_BACK;
+        rasterizer_full.FrontCounterClockwise = TRUE;
+        rasterizer_full.DepthBias = 0;
+        rasterizer_full.DepthBiasClamp = 0.0f;
+        rasterizer_full.SlopeScaledDepthBias = 0.0f;
+        rasterizer_full.DepthClipEnable = TRUE;
+        rasterizer_full.MultisampleEnable = TRUE;
+        rasterizer_full.AntialiasedLineEnable = TRUE;
+        rasterizer_full.ForcedSampleCount = 0;
+        rasterizer_full.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+    }
+
+    D3D12_BLEND_DESC blend_desc;
+    {
+        ZeroMemory(&blend_desc, sizeof(blend_desc));
+        blend_desc.AlphaToCoverageEnable = false;
+        blend_desc.IndependentBlendEnable = false;
+        blend_desc.RenderTarget[0].BlendEnable = true;
+        blend_desc.RenderTarget[0].LogicOpEnable = false;
+        blend_desc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        blend_desc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        blend_desc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+        blend_desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+        blend_desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+        blend_desc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        //blend_desc.RenderTarget[0].LogicOp;
+        blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    }
 
     {
-        Texture::TextureParams tp = {
-            .size = ToVec3I(s_dx11.swap_chain.size, 0),
-            .format = Texture::Format_D32_FLOAT,
-            .mode = Texture::Address_Invalid,
-            .filter = Texture::Filter_Invalid,
-            .type = Texture::Type_Depth,
-            .render_target = true,
-            .bytes_per_pixel = 0,
-        };
-        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_Depth], tp, nullptr);
-    }
-    {
-        Texture::TextureParams tp = {
-            .size   = ToVec3I(s_dx11.swap_chain.size, 0),
-            .format = Texture::Format_R11G11B10_FLOAT,
-            .mode   = Texture::Address_Clamp,
-            .filter = Texture::Filter_Aniso,
-            .type   = Texture::Type_Texture,
-            .render_target = true,
-            .bytes_per_pixel = 4,
-        };
-        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_HDR], tp, nullptr);
+        DX12Shader* shader = reinterpret_cast<DX12Shader*>(g_renderer.shaders[+Shader::Index_Cube]);
+        // Describe and create the graphics pipeline state object (PSO).
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.InputLayout = { shader->m_local_layout, arrsize(shader->m_local_layout) };
+        psoDesc.pRootSignature = s_dx12.root_signature;
+        psoDesc.VS = { reinterpret_cast<UINT8*>(shader->m_vertex_blob->GetBufferPointer()), shader->m_vertex_blob->GetBufferSize()  };
+        psoDesc.PS = { reinterpret_cast<UINT8*>(shader->m_pixel_blob->GetBufferPointer()),  shader->m_pixel_blob->GetBufferSize()   };
+        psoDesc.RasterizerState = rasterizer_full;
+        psoDesc.BlendState = blend_desc;
+        psoDesc.DepthStencilState.DepthEnable = TRUE;
+        psoDesc.DepthStencilState.StencilEnable = FALSE;
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; //TODO: Render to a secondary HDR buffer
+        psoDesc.SampleDesc.Count = 1;
+        HR(s_dx12.device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_dx12.pipeline_state[PipelineState::Cube_Full])));
     }
 
-    //Create Shaders:
-    //{
-    //    D3D11_INPUT_ELEMENT_DESC layout[] = {
-    //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT,   0, (UINT)offsetof(Vertex, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //        { "UV",         0, DXGI_FORMAT_R32G32_FLOAT,      0, (UINT)offsetof(Vertex, uv),  D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //        { "NORMAL",     0, DXGI_FORMAT_R32G32B32_FLOAT,   0, (UINT)offsetof(Vertex, n),   D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
-    //    g_renderer.shaders[+Shader::Main] = new Shader("Source/Shaders/Main.vert", "Source/Shaders/Main.frag", layout, arrsize(layout));
-    //}
-    //{
-    //    D3D11_INPUT_ELEMENT_DESC layout[] = {
-    //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Voxel, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //        { "COLOR",      0, DXGI_FORMAT_R32_UINT,        0, (UINT)offsetof(Vertex_Voxel, rgba),D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //        { "NORMAL",     0, DXGI_FORMAT_R8_UINT,         0, (UINT)offsetof(Vertex_Voxel, n),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //        { "AO",         0, DXGI_FORMAT_R8_UINT,         0, (UINT)offsetof(Vertex_Voxel, ao),  D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
-    //    g_renderer.shaders[+Shader::Voxel_Rast] = new Shader("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag", layout, arrsize(layout));
-    //}
-    {
-        //D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 } };
-        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Voxel],   "Source/Shaders/Voxel.hlsl",    layout, arrsize(layout)));
-    }
-    {
-        Shader::InputElementDesc layout[] = {
-            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Cube, color)    },
-            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Cube, p)        },
-            { "TEXCOORD",   DXGI_FORMAT_R32G32_FLOAT,       offsetof(Vertex_Cube, uv)       } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
-    }
-    {
-        Shader::InputElementDesc layout[] = {
-            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Tetra, color)    },
-            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, p)        },
-            { "NORMAL",     DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, n)        } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Tetra],    "Source/Shaders/Tetra.hlsl",   layout, arrsize(layout)));
-    }
-    {
-        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
-    }
-    //{
-    //    D3D11_INPUT_ELEMENT_DESC layout[] = {
-    //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //        { "COLOR",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, color),D3D11_INPUT_PER_VERTEX_DATA, 0 } };
-    //    g_renderer.shaders[+Shader::Cube] = new Shader("Source/Shaders/Cube.vert", "Source/Shaders/Cube.frag", layout, arrsize(layout));
-    //}
+    // Create the command list.
+    HR(s_dx12.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_dx12.command_allocator, s_dx12.pipeline_state[PipelineState::Cube_Full], IID_PPV_ARGS(&s_dx12.command_list)));
 
-    //Create Buffers:
-    CreateGpuBuffer(&g_renderer.quad_ib,        "Quad_IB",          true,   GpuBuffer::Type::Index);
-    FillIndexBuffer(g_renderer.quad_ib, 6 * 4);
-    CreateGpuBuffer(&g_renderer.tetra_vb,       "Tetra_VB",         false,  GpuBuffer::Type::Vertex);
-    //CreateGpuBuffer(&g_renderer.voxel_rast_vb,  "Voxel_Rast_VB",    true,   GpuBuffer::Type::Vertex);
-    //CreateGpuBuffer(&g_renderer.box_vb,         "Box_VB",           false,  GpuBuffer::Type::Vertex);
-    CreateGpuBuffer(&g_renderer.cube_vb,        "Cube_VB",          false,  GpuBuffer::Type::Vertex);
-    {
-        float p = 0.5f;
-        Vertex vertices[] = {
-            // |   Position    |      UV       |         Normal        |
-              { { +0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } }, // +x
-              { { +0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
-              { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
-
-              { { +0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
-              { { +0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
-              { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
+    // Command lists are created in the recording state, but there is nothing
+    // to record yet. The main loop expects it to be closed, so close it now.
+    HR(s_dx12.command_list->Close());
 
 
-              { { -0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } }, // -x
-              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
-              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
-
-              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
-              { { -0.5f, -0.5f, +0.5f }, { 1.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
-              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
-
-
-              { { +0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } }, // +y
-              { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
-              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
-
-              { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
-              { { -0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
-              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
-
-
-              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y
-              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
-              { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
-
-              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
-              { { +0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
-              { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
-
-
-              { { -0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } }, // +z
-              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
-              { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
-
-              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
-              { { +0.5f, -0.5f, +0.5f }, { 1.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
-              { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
-
-
-              { { +0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } }, // -z
-              { { +0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
-              { { -0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
-
-              { { +0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
-              { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
-              { { -0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
-        };
-        static_assert(arrsize(vertices) == 36, "");
-
-        Vec3 voxel_box_vertices[arrsize(vertices)] = {};
-        for (i32 i = 0; i < arrsize(vertices); i++)
-        {
-            voxel_box_vertices[i] = vertices[i].p;
-        }
-        //g_renderer.box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices), sizeof(voxel_box_vertices[0]));
-    }
-    {
-        CreateGpuBuffer(&g_renderer.voxel_vb, "Voxel_VB", false, GpuBuffer::Type::Vertex);
-        Vec2 a[] = {
-            { -1.0f, +1.0f }, // 0
-            { +3.0f, +1.0f }, // 1
-            { -1.0f, -3.0f }, // 2
-        };
-        g_renderer.voxel_vb->Upload(a, arrsize(a), sizeof(a[0]));
-    }
-    CreateGpuBuffer(&g_renderer.cb_common, "common_cb", true, GpuBuffer::Type::Constant);
-
+#if 0
     //Create Blender State
     {
-        D3D11_BLEND_DESC desc;
+        D3D12_BLEND_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
         desc.AlphaToCoverageEnable = false;
         desc.IndependentBlendEnable = false;
@@ -1506,25 +1438,9 @@ void InitializeVideo()
         desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
         desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
         desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        s_dx11.device->CreateBlendState(&desc, &s_dx11.blend_state);
+        s_dx12.device->CreateBlendState(&desc, &s_dx12.blend_state);
     }
 
-    // Create the rasterizer state
-    {
-        D3D11_RASTERIZER_DESC desc;
-        ZeroMemory(&desc, sizeof(desc));
-        desc.FillMode = D3D11_FILL_SOLID;
-        desc.CullMode = D3D11_CULL_BACK;
-        desc.FrontCounterClockwise = TRUE;
-        desc.DepthBias = 0;
-        desc.DepthBiasClamp = 0.0f;
-        desc.SlopeScaledDepthBias = 0.0f;
-        desc.DepthClipEnable = TRUE;
-        desc.ScissorEnable = FALSE;
-        desc.MultisampleEnable = TRUE;
-        desc.AntialiasedLineEnable = TRUE;
-        s_dx11.device->CreateRasterizerState(&desc, &s_dx11.rasterizer_full);
-    }
     {
         D3D11_RASTERIZER_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
@@ -1547,6 +1463,7 @@ void InitializeVideo()
         desc.CullMode = D3D11_CULL_NONE;
         desc.FrontCounterClockwise = TRUE;
         desc.DepthBias = 0;
+
         desc.DepthBiasClamp = 0.0f;
         desc.SlopeScaledDepthBias = 0.0f;
         desc.DepthClipEnable = FALSE;
@@ -1612,6 +1529,21 @@ void InitializeVideo()
         // Create depth stencil state
         HR(s_dx11.device->CreateDepthStencilState(&desc, &s_dx11.depth_stencil_state_no_depth));
     }
+#endif
+
+    {
+        HR(s_dx12.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&s_dx12.fence)));
+        s_dx12.fence_value = 1;
+
+        // Create an event handle to use for frame synchronization.
+        s_dx12.fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (s_dx12.fence_event == nullptr)
+        {
+            HR(HRESULT_FROM_WIN32(GetLastError()));
+        }
+    }
+
+    WaitForPreviousFrame();
 
     InitializeImGui();
 }
@@ -1651,6 +1583,44 @@ void RenderUpdate(Vec2I window_size, float deltaTime)
 {
     ZoneScopedN("Render Update");
 
+#if 1
+    //DX12 Implementation:
+
+    // Command list allocators can only be reset when the associated 
+    // command lists have finished execution on the GPU; apps should use 
+    // fences to determine GPU execution progress.
+    HR(s_dx12.command_allocator->Reset());
+
+    // However, when ExecuteCommandList() is called on a particular command 
+    // list, that command list can then be reset at any time and must be before 
+    // re-recording.
+    HR(s_dx12.command_allocator->Reset(s_dx12.command_allocator.Get(), s_dx12.pipeline_state.Get()));
+
+    // Set necessary state.
+    s_dx12.command_list->SetGraphicsRootSignature(s_dx12.root_signature.Get());
+    s_dx12.command_list->RSSetViewports(1, &s_dx12.m_viewport);
+    s_dx12.command_list->RSSetScissorRects(1, &m_scissorRect);
+
+    // Indicate that the back buffer will be used as a render target.
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_commandList->ResourceBarrier(1, &barrier);
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
+    m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+
+    // Record commands.
+    const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+    m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    m_commandList->DrawInstanced(3, 1, 0, 0);
+
+    // Indicate that the back buffer will now be used to present.
+    barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    m_commandList->ResourceBarrier(1, &barrier);
+
+    ThrowIfFailed(m_commandList->Close());
+#else
     //Vec2I window_size;
     //SDL_GetWindowSizeInPixels(g_renderer.SDL_Context, &window_size.x, &window_size.y);
     if (s_dx11.swap_chain.size != window_size)
@@ -1662,6 +1632,7 @@ void RenderUpdate(Vec2I window_size, float deltaTime)
     DX11Texture* depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
     s_dx11.device_context->ClearDepthStencilView(depth->m_depth_stencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
+#endif
     if (s_last_shader_update_time + 0.1f <= s_incremental_time)
     {
         for (Shader* s : g_renderer.shaders)
@@ -1963,7 +1934,7 @@ void DrawPathTracedVoxels()
     }
 }
 
-void FinalDraw()
+void DrawFinal()
 {
     ID3D11DeviceContext* context = s_dx11.device_context;
     DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Final_Draw]);
@@ -2049,7 +2020,7 @@ void FinalDraw()
 //**********************
 
 template<typename T>
-void RenderPrimitiveInternal(
+void DrawPrimitiveInternal(
     std::vector<T>& verts_to_draw, 
     ID3D11RasterizerState* rasterizer, 
     Texture::Index texture_i,
@@ -2258,16 +2229,16 @@ void AddTetrahedronToRender(const Vec3 p, const Vec3 dir, Color color, Vec3  sca
     }
 }
 
-void RenderPrimitives()
+void DrawPrimitives()
 {
     ZoneScopedN("Render Primitives");
     g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
-    RenderPrimitiveInternal(s_tetrasToDraw_opaque,      s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
-    RenderPrimitiveInternal(s_cubesToDraw_opaque,       s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
-    RenderPrimitiveInternal(s_tetrasToDraw_transparent, s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
-    RenderPrimitiveInternal(s_cubesToDraw_transparent,  s_dx11.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
-    RenderPrimitiveInternal(s_tetrasToDraw_wireframe,   s_dx11.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
-    RenderPrimitiveInternal(s_cubesToDraw_wireframe,    s_dx11.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    DrawPrimitiveInternal(s_tetrasToDraw_opaque,      s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    DrawPrimitiveInternal(s_cubesToDraw_opaque,       s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    DrawPrimitiveInternal(s_tetrasToDraw_transparent, s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    DrawPrimitiveInternal(s_cubesToDraw_transparent,  s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    DrawPrimitiveInternal(s_tetrasToDraw_wireframe,   s_dx12.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    DrawPrimitiveInternal(s_cubesToDraw_wireframe,    s_dx12.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
 }
 
 const SDL_MessageBoxColorScheme colorScheme = {
@@ -2308,3 +2279,35 @@ i32 CreateMessageWindow(SDL_MessageBoxButtonData* buttons, i32 numOfButtons, Mes
     }
     return buttonID;
 }
+
+i32 CreateMessageWindow(SDL_MessageBoxButtonData* buttons, i32 numOfButtons, MessageBoxType type, const wchar_t* title, const wchar_t* message)
+{
+
+    std::string title_mb;
+    ConvertWideCharToMultiByte(title_mb, title);
+    std::string message_mb;
+    ConvertWideCharToMultiByte(message_mb, message);
+
+    SDL_MessageBoxData messageBoxData = {
+        .flags = u32(type),
+        .window = NULL,
+        .title = title_mb.c_str(),      //an UTF-8 title
+        .message = message_mb.c_str(),  //an UTF-8 message text
+        .numbuttons = numOfButtons,     //the number of buttons
+        .buttons = buttons,             //an array of SDL_MessageBoxButtonData with length of numbuttons
+        .colorScheme = &colorScheme
+    };
+
+    i32 buttonID = 0;
+
+    if (SDL_ShowMessageBox(&messageBoxData, &buttonID))
+    {
+        FAIL;
+    }
+    if (buttonID == -1)
+    {
+        FAIL;
+    }
+    return buttonID;
+}
+#endif

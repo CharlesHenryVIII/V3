@@ -23,6 +23,15 @@ void DebugPrint(const char* fmt, ...)
     OutputDebugStringA(buffer);
     va_end(list);
 }
+void DebugPrint(const wchar_t* fmt, ...)
+{
+    va_list list;
+    va_start(list, fmt);
+    wchar_t buffer[4096];
+    _vsnwprintf(buffer, sizeof(buffer), fmt, list);
+    OutputDebugStringW(buffer);
+    va_end(list);
+}
 
 std::string ToString(const char* fmt, ...)
 {
@@ -71,6 +80,64 @@ void ScanDirectoryForFileNames(const std::string& dir, std::vector<std::string>&
             break;
         }
 	}
+}
+
+void ConvertMultibyteToWideChar(std::wstring& out, const std::string& in)
+{
+    //WideCharToMultiByte
+    i32 wide_char_count = MultiByteToWideChar(
+        CP_UTF8,                //[in]            UINT                              CodePage,
+        MB_ERR_INVALID_CHARS,   //[in]            DWORD                             dwFlags,
+        in.c_str(),             //[in]            _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
+        -1,                     //[in]            int                               cbMultiByte,
+        nullptr,                //[out, optional] LPWSTR                            lpWideCharStr,
+        0                       //[in]            int                               cchWideChar
+    );
+    assert(wide_char_count > 0);
+    out.clear();
+    out.resize(wide_char_count);
+    i32 wide_char_actual = MultiByteToWideChar(
+        CP_UTF8,                //[in]            UINT                              CodePage,
+        MB_ERR_INVALID_CHARS,   //[in]            DWORD                             dwFlags,
+        in.c_str(),             //[in]            _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
+        -1,                     //[in]            int                               cbMultiByte,
+        out.data(),             //[out, optional] LPWSTR                            lpWideCharStr,
+        wide_char_count         //[in]            int                               cchWideChar
+    );
+    assert(wide_char_actual > 0);
+    assert(wide_char_actual == wide_char_count);
+}
+
+void ConvertWideCharToMultiByte(std::string& out, const std::wstring& in)
+{
+    //WideCharToMultiByte
+    BOOL invalid_string;
+
+    i32 multibyte_char_count = WideCharToMultiByte(
+        CP_UTF8,                //[in]            UINT                               CodePage,
+        MB_ERR_INVALID_CHARS,   //[in]            DWORD                              dwFlags,
+        in.c_str(),             //[in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
+        -1,                     //[in]            int                                cchWideChar,
+        nullptr,                //[out, optional] LPSTR                              lpMultiByteStr,
+        0,                      //[in]            int                                cbMultiByte,
+        "#",                    //[in, optional]  LPCCH                              lpDefaultChar,
+        LPBOOL(&invalid_string) //[out, optional] LPBOOL                             lpUsedDefaultChar
+    );
+    assert(multibyte_char_count > 0);
+    out.clear();
+    out.resize(multibyte_char_count);
+    i32 multibyte_char_actual = WideCharToMultiByte(
+        CP_UTF8,                //[in]            UINT                               CodePage,
+        MB_ERR_INVALID_CHARS,   //[in]            DWORD                              dwFlags,
+        in.c_str(),             //[in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
+        -1,                     //[in]            int                                cchWideChar,
+        out.data(),             //[out, optional] LPSTR                              lpMultiByteStr,
+        out.size(),             //[in]            int                                cbMultiByte,
+        "#",                    //[in, optional]  LPCCH                              lpDefaultChar,
+        LPBOOL(&invalid_string) //[out, optional] LPBOOL                             lpUsedDefaultChar
+    );
+    assert(multibyte_char_actual > 0);
+    assert(multibyte_char_actual == multibyte_char_count);
 }
 
 //

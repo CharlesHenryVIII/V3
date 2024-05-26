@@ -10,6 +10,10 @@
 
 #define MAX_MIPS 10
 
+//#define RENDER_PIPELINE_OPENGL BIT(1)
+#define RENDER_PIPELINE_DX11 BIT(2)
+#define RENDER_PIPELINE_DX12 BIT(3)
+#define RENDER_PIPELINE RENDER_PIPELINE_DX12
 
 
 
@@ -183,15 +187,15 @@ struct Shader
     ~Shader();
     void CheckForUpdate();
 
-    std::string m_vertexFile;
-    std::string m_pixelFile;
+    std::wstring m_vertex_filename;
+    std::wstring m_pixel_filename;
     u64 m_vertexLastWriteTime = {};
     u64 m_pixelLastWriteTime = {};
     u32 m_vertex_component_count = 0;
     std::vector<std::string> m_reference_file_names;
     std::vector<u64> m_reference_file_times;
 
-    bool CompileShader(std::string text, const std::string& file_name, Shader::Type shader_type);
+    bool CompileShader(const std::wstring& file_name, Shader::Type shader_type);
 };
 bool CreateShader(Shader** shader,
     const std::string& vertexFileLocation,
@@ -249,8 +253,8 @@ void DrawPathTracedVoxels();
         void AddCubeToRender(Vec3 p, Color color, Vec3  scale, bool wireframe);
 inline  void AddCubeToRender(Vec3 p, Color color, float scale, bool wireframe) { AddCubeToRender(p, color, { scale, scale, scale }, wireframe); }
 void AddTetrahedronToRender(const Vec3 p, const Vec3 dir, Color color, Vec3  scale, bool wireframe);
-void RenderPrimitives();
-void FinalDraw();
+void DrawPrimitives();
+void DrawFinal();
 
 
 enum class MessageBoxType {
@@ -261,6 +265,7 @@ enum class MessageBoxType {
     Count,
 };
 i32 CreateMessageWindow(SDL_MessageBoxButtonData* buttons, i32 numOfButtons, MessageBoxType type, const char* title, const char* message);
+i32 CreateMessageWindow(SDL_MessageBoxButtonData* buttons, i32 numOfButtons, MessageBoxType type, const wchar_t* title, const wchar_t* message);
 
 #if 0
 class TextureArray {
@@ -287,3 +292,201 @@ public:
     void Bind();
 };
 #endif
+
+
+void InitializeData(const Vec2I backbuffer_size)
+{
+    //
+    //Create Textures:
+    //
+
+    CreateTexture(&g_renderer.textures[Texture::Index_Minecraft], "assets/MinecraftSpriteSheet20120215Modified.png", Texture::Format_R8G8B8A8_UNORM_SRGB, Texture::Filter_Point);
+    u8 pixel_texture_data[] = { 255, 255, 255, 255 };
+    CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1, 0 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
+    CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
+
+    {
+        Texture::TextureParams tp = {
+            .size = ToVec3I(backbuffer_size, 0),
+            .format = Texture::Format_D32_FLOAT,
+            .mode = Texture::Address_Invalid,
+            .filter = Texture::Filter_Invalid,
+            .type = Texture::Type_Depth,
+            .render_target = true,
+            .bytes_per_pixel = 0,
+        };
+        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_Depth], tp, nullptr);
+    }
+    {
+        Texture::TextureParams tp = {
+            .size   = ToVec3I(backbuffer_size, 0),
+            .format = Texture::Format_R11G11B10_FLOAT,
+            .mode   = Texture::Address_Clamp,
+            .filter = Texture::Filter_Aniso,
+            .type   = Texture::Type_Texture,
+            .render_target = true,
+            .bytes_per_pixel = 4,
+        };
+        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_HDR], tp, nullptr);
+    }
+
+
+    //
+    //Create Shaders:
+    //
+
+    //{
+    //    D3D11_INPUT_ELEMENT_DESC layout[] = {
+    //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT,   0, (UINT)offsetof(Vertex, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    //        { "UV",         0, DXGI_FORMAT_R32G32_FLOAT,      0, (UINT)offsetof(Vertex, uv),  D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    //        { "NORMAL",     0, DXGI_FORMAT_R32G32B32_FLOAT,   0, (UINT)offsetof(Vertex, n),   D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
+    //    g_renderer.shaders[+Shader::Main] = new Shader("Source/Shaders/Main.vert", "Source/Shaders/Main.frag", layout, arrsize(layout));
+    //}
+    //{
+    //    D3D11_INPUT_ELEMENT_DESC layout[] = {
+    //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Voxel, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    //        { "COLOR",      0, DXGI_FORMAT_R32_UINT,        0, (UINT)offsetof(Vertex_Voxel, rgba),D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    //        { "NORMAL",     0, DXGI_FORMAT_R8_UINT,         0, (UINT)offsetof(Vertex_Voxel, n),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    //        { "AO",         0, DXGI_FORMAT_R8_UINT,         0, (UINT)offsetof(Vertex_Voxel, ao),  D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
+    //    g_renderer.shaders[+Shader::Voxel_Rast] = new Shader("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag", layout, arrsize(layout));
+    //}
+    {
+        //D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 } };
+        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Voxel],   "Source/Shaders/Voxel.hlsl",    layout, arrsize(layout)));
+    }
+    {
+        Shader::InputElementDesc layout[] = {
+            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Cube, color)    },
+            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Cube, p)        },
+            { "TEXCOORD",   DXGI_FORMAT_R32G32_FLOAT,       offsetof(Vertex_Cube, uv)       } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
+    }
+    {
+        Shader::InputElementDesc layout[] = {
+            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Tetra, color)    },
+            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, p)        },
+            { "NORMAL",     DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, n)        } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Tetra],    "Source/Shaders/Tetra.hlsl",   layout, arrsize(layout)));
+    }
+    {
+        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
+    }
+    //{
+    //    D3D11_INPUT_ELEMENT_DESC layout[] = {
+    //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    //        { "COLOR",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, color),D3D11_INPUT_PER_VERTEX_DATA, 0 } };
+    //    g_renderer.shaders[+Shader::Cube] = new Shader("Source/Shaders/Cube.vert", "Source/Shaders/Cube.frag", layout, arrsize(layout));
+    //}
+
+    //
+    //Create Buffers:
+    //
+    CreateGpuBuffer(&g_renderer.quad_ib,        "Quad_IB",          true,   GpuBuffer::Type::Index);
+    {
+        size_t count = 6 * 4;
+        if (g_renderer.quad_ib->m_count > count)
+            return;
+        std::vector<u32> arr;
+
+        //size_t amount = VOXEL_MAX_SIZE * VOXEL_MAX_SIZE * VOXEL_MAX_SIZE * 6 * 6;
+        size_t amount = 6 * count;
+        arr.reserve(amount);
+        i32 baseIndex = 0;
+        for (i32 i = 0; i < amount; i += 6)
+
+        {
+            arr.push_back(baseIndex + 0);
+            arr.push_back(baseIndex + 1);
+            arr.push_back(baseIndex + 2);
+            arr.push_back(baseIndex + 1);
+            arr.push_back(baseIndex + 3);
+            arr.push_back(baseIndex + 2);
+
+            baseIndex += 4; //Amount of vertices
+        }
+
+        g_renderer.quad_ib->Upload(arr.data(), amount, sizeof(baseIndex));
+    }
+    CreateGpuBuffer(&g_renderer.tetra_vb,       "Tetra_VB",         false,  GpuBuffer::Type::Vertex);
+    //CreateGpuBuffer(&g_renderer.voxel_rast_vb,  "Voxel_Rast_VB",    true,   GpuBuffer::Type::Vertex);
+    //CreateGpuBuffer(&g_renderer.box_vb,         "Box_VB",           false,  GpuBuffer::Type::Vertex);
+    CreateGpuBuffer(&g_renderer.cube_vb,        "Cube_VB",          false,  GpuBuffer::Type::Vertex);
+    {
+        float p = 0.5f;
+        Vertex vertices[] = {
+            // |   Position    |      UV       |         Normal        |
+              { { +0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } }, // +x
+              { { +0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+              { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
+
+              { { +0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+              { { +0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  1.0f,  0.0f,  0.0f } },
+              { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  1.0f,  0.0f,  0.0f } },
+
+
+              { { -0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } }, // -x
+              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
+
+              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+              { { -0.5f, -0.5f, +0.5f }, { 1.0f, 0.0f }, { -1.0f,  0.0f,  0.0f } },
+              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { -1.0f,  0.0f,  0.0f } },
+
+
+              { { +0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } }, // +y
+              { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
+
+              { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+              { { -0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f,  1.0f,  0.0f } },
+              { { -0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  1.0f,  0.0f } },
+
+
+              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } }, // -y
+              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+              { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
+
+              { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+              { { +0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f, -1.0f,  0.0f } },
+              { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f, -1.0f,  0.0f } },
+
+
+              { { -0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } }, // +z
+              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+              { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
+
+              { { -0.5f, -0.5f, +0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+              { { +0.5f, -0.5f, +0.5f }, { 1.0f, 0.0f }, {  0.0f,  0.0f,  1.0f } },
+              { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f,  1.0f } },
+
+
+              { { +0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } }, // -z
+              { { +0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+              { { -0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
+
+              { { +0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+              { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f }, {  0.0f,  0.0f, -1.0f } },
+              { { -0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, {  0.0f,  0.0f, -1.0f } },
+        };
+        static_assert(arrsize(vertices) == 36, "");
+
+        Vec3 voxel_box_vertices[arrsize(vertices)] = {};
+        for (i32 i = 0; i < arrsize(vertices); i++)
+        {
+            voxel_box_vertices[i] = vertices[i].p;
+        }
+        //g_renderer.box_vb->Upload(voxel_box_vertices, arrsize(voxel_box_vertices), sizeof(voxel_box_vertices[0]));
+    }
+    {
+        CreateGpuBuffer(&g_renderer.voxel_vb, "Voxel_VB", false, GpuBuffer::Type::Vertex);
+        Vec2 a[] = {
+            { -1.0f, +1.0f }, // 0
+            { +3.0f, +1.0f }, // 1
+            { -1.0f, -3.0f }, // 2
+        };
+        g_renderer.voxel_vb->Upload(a, arrsize(a), sizeof(a[0]));
+    }
+    CreateGpuBuffer(&g_renderer.cb_common, "common_cb", true, GpuBuffer::Type::Constant);
+}

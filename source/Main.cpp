@@ -526,14 +526,15 @@ int main(int argc, char* argv[])
             g_renderer.cb_common->Upload(&common, 1, sizeof(common));
             g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
 
+            TempPopulateCommandQueue();
+
 #if RASTERIZED_RENDERING == 0
             //Pathtraced voxel rendering
             {
                 ZoneScopedN("Voxel Render");
-                DrawPathTracedVoxels();
+                //DrawPathTracedVoxels();
             }
 #else
-
 
 
             //Rasterized voxel rendering
@@ -562,15 +563,15 @@ int main(int argc, char* argv[])
             }
 #endif
 
-            {
-                ZoneScopedN("Cube Render");
-                g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
-                DrawPrimitives();
-            }
-            {
-                ZoneScopedN("Final Draw");
-                DrawFinal();
-            }
+            //{
+            //    ZoneScopedN("Cube Render");
+            //    g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
+            //    DrawPrimitives();
+            //}
+            //{
+            //    ZoneScopedN("Final Draw");
+            //    DrawFinal();
+            //}
 
             {
                 ZoneScopedN("ImGui Render");

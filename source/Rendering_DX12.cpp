@@ -16,7 +16,7 @@
 #include <d3dcompiler.h>
 #include <dxgi.h>
 #include <dxgi1_4.h>
-#include <d3dx12.h>
+//#include <d3dx12.h>
 #include <dxgidebug.h>
 //#ifdef _MSC_VER
 //#pragma comment(lib, "d3dcompiler") // Automatically link with d3dcompiler.lib as we are using D3DCompile() below.
@@ -55,6 +55,7 @@ struct DX12Data {
     ID3D12CommandQueue*     command_queue;
 
     ID3D12DescriptorHeap*       rtv_heap;
+    ID3D12DescriptorHeap*       srv_heap;
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle;
     D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle;
 
@@ -64,9 +65,15 @@ struct DX12Data {
     HANDLE          fence_event;
     //UINT            frame_index;
 
-    D3D12_VIEWPORT          root_signature;
+    D3D12_VIEWPORT          viewport;
 
     SwapChain               swap_chain;
+
+    UINT rtv_descriptor_size;
+
+    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
+
+    UINT frame_index = 0;
 
     //ID3D12BlendState*       blend_state;
     //ID3D12RasterizerState*  rasterizer_full;
@@ -116,16 +123,16 @@ extern "C" {
         }
     #endif
 
-    void ReportDX11References()
-    {
-        IDXGIDebug* debug_interface;
-        HR(DXGIGetDebugInterface(IID_PPV_ARGS(&debug_interface)));
-        if (debug_interface)
-        {
-            debug_interface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
-        }
-        SafeRelease(debug_interface);
-    }
+    //void ReportDX11References()
+    //{
+    //    IDXGIDebug* debug_interface;
+    //    HR(DXGIGetDebugInterface(IID_PPV_ARGS(&debug_interface)));
+    //    if (debug_interface)
+    //    {
+    //        debug_interface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+    //    }
+    //    SafeRelease(debug_interface);
+    //}
 #else
     void ReportDX11References() {};
     #ifndef HR
@@ -143,44 +150,44 @@ extern "C" {
 //************
 
 struct DX11Texture : public Texture {
-    ID3D11SamplerState* m_sampler = nullptr;
-    ID3D11ShaderResourceView* m_view = nullptr;
-    union {
-        ID3D11Texture1D* m_texture1D;
-        ID3D11Texture2D* m_texture2D;
-        ID3D11Texture3D* m_texture3D;
-    };
-    DXGI_FORMAT m_format;
+    //ID3D11SamplerState* m_sampler = nullptr;
+    //ID3D11ShaderResourceView* m_view = nullptr;
+    //union {
+    //    ID3D11Texture1D* m_texture1D;
+    //    ID3D11Texture2D* m_texture2D;
+    //    ID3D11Texture3D* m_texture3D;
+    //};
+    //DXGI_FORMAT m_format;
 
-    //Only used for depth and stencil textures
-    ID3D11DepthStencilView* m_depth_stencil_view = nullptr;
+    ////Only used for depth and stencil textures
+    //ID3D11DepthStencilView* m_depth_stencil_view = nullptr;
 };
 
 void DeleteTexture(Texture** texture)
 {
-    VALIDATE(texture);
-    VALIDATE(*texture != nullptr);
-    DX11Texture* tex = reinterpret_cast<DX11Texture*>(*texture);
-    switch (tex->m_dimension)
-    {
-    case Texture::Dimension_1D: SafeRelease(tex->m_texture1D); break;
-    case Texture::Dimension_2D: SafeRelease(tex->m_texture2D); break;
-    case Texture::Dimension_3D: SafeRelease(tex->m_texture3D); break;
-    }
-    if (tex->m_parameters.type == Texture::Type_Depth)
-    {
-        assert(tex->m_view == nullptr);
-        assert(tex->m_sampler == nullptr);
-        SafeRelease(tex->m_depth_stencil_view);
-    }
-    else
-    {
-        assert(tex->m_depth_stencil_view == nullptr);
-        SafeRelease(tex->m_sampler);
-        SafeRelease(tex->m_view);
-    }
-    delete tex;
-    *texture = nullptr;
+    //VALIDATE(texture);
+    //VALIDATE(*texture != nullptr);
+    //DX11Texture* tex = reinterpret_cast<DX11Texture*>(*texture);
+    //switch (tex->m_dimension)
+    //{
+    //case Texture::Dimension_1D: SafeRelease(tex->m_texture1D); break;
+    //case Texture::Dimension_2D: SafeRelease(tex->m_texture2D); break;
+    //case Texture::Dimension_3D: SafeRelease(tex->m_texture3D); break;
+    //}
+    //if (tex->m_parameters.type == Texture::Type_Depth)
+    //{
+    //    assert(tex->m_view == nullptr);
+    //    assert(tex->m_sampler == nullptr);
+    //    SafeRelease(tex->m_depth_stencil_view);
+    //}
+    //else
+    //{
+    //    assert(tex->m_depth_stencil_view == nullptr);
+    //    SafeRelease(tex->m_sampler);
+    //    SafeRelease(tex->m_view);
+    //}
+    //delete tex;
+    //*texture = nullptr;
 }
 
 bool CreateTexture(Texture** texture, void* data, Vec3I size, Texture::Format format, i32 bytes_per_pixel)
@@ -209,272 +216,274 @@ bool CreateTexture(Texture** texture, const Texture::TextureParams& tp, const vo
 }
 bool CreateTexture(Texture** texture, const Texture::TextureParams& tp, u32 mip_levels, const u8* data)
 {
-    VALIDATE_V(texture, false);
-    VALIDATE_V(*texture == nullptr, false);
-    //VALIDATE_V(data, false);
-
-    DX11Texture* tex = new DX11Texture;
-    *texture = tex;
-
-    tex->m_parameters = tp;
-    tex->m_mip_levels = mip_levels;
-    assert(tex->m_parameters.size.x != -1 && tex->m_parameters.size.x != 0);
-    if (tex->m_parameters.size.z > 0)
-    {
-        tex->m_dimension = Texture::Dimension_3D;
-    }
-    else if (tex->m_parameters.size.y > 0)
-    {
-        tex->m_dimension = Texture::Dimension_2D;
-    }
-    else
-    {
-        tex->m_dimension = Texture::Dimension_1D;
-    }
-
-    switch (tp.format)
-    {
-    case Texture::Format_R11G11B10_FLOAT:       tex->m_format = DXGI_FORMAT_R11G11B10_FLOAT;    break;
-    case Texture::Format_D32_FLOAT:             tex->m_format = DXGI_FORMAT_D32_FLOAT;          break;
-    case Texture::Format_D16_UNORM:             tex->m_format = DXGI_FORMAT_D16_UNORM;          break;
-    case Texture::Format_R8G8B8A8_UNORM:        tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM;     break;
-    case Texture::Format_R8G8B8A8_UNORM_SRGB:   tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;break;
-    case Texture::Format_R8G8B8A8_UINT:         tex->m_format = DXGI_FORMAT_R8G8B8A8_UINT;      break;
-    case Texture::Format_R8_UINT:               tex->m_format = DXGI_FORMAT_R8_UINT;            break;
-    default: FAIL;                              tex->m_format = DXGI_FORMAT_UNKNOWN;            break;
-    }
-
-    switch (tex->m_parameters.type)
-    {
-    case Texture::Type_Depth:
-    {
-        D3D11_TEXTURE2D_DESC desc;
-        ZeroMemory(&desc, sizeof(desc));
-        desc.Width = (u32)tex->m_parameters.size.x;
-        desc.Height = (u32)tex->m_parameters.size.y;
-        desc.MipLevels = desc.ArraySize = 1;
-        switch (tp.format)
-        {
-        case Texture::Format_D32_FLOAT:         desc.Format = DXGI_FORMAT_R32_TYPELESS;         break;
-        case Texture::Format_D16_UNORM:         desc.Format = DXGI_FORMAT_R16_TYPELESS;         break;
-        default: FAIL; break;
-        }
-        desc.SampleDesc.Count = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Usage = D3D11_USAGE_DEFAULT;
-        desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
-        desc.CPUAccessFlags = 0;
-        desc.MiscFlags = 0;
-
-        HR(s_dx11.device->CreateTexture2D(&desc, NULL, &tex->m_texture2D));
-    }
-    {
-
-        D3D11_DEPTH_STENCIL_VIEW_DESC desc;
-        ZeroMemory(&desc, sizeof(desc));
-        desc.Format = tex->m_format;
-        desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-        desc.Texture2D.MipSlice = 0;
-
-        // Create the depth stencil view
-        HR(s_dx11.device->CreateDepthStencilView(
-            tex->m_texture2D,               // Depth stencil texture
-            &desc,                          // Depth stencil desc
-            &tex->m_depth_stencil_view));    // [out] Depth stencil view
-    }
-    DEBUG_LOG("Texture Created\n");
-    return true;
-    }
-
-
-    assert(tex->m_parameters.bytes_per_pixel);
-
-    //Create Texture
-    switch (tex->m_dimension)
-    {
-    case Texture::Dimension_1D:
-    {
-        {
-            D3D11_TEXTURE1D_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.Width = (u32)tex->m_parameters.size.x;
-            desc.MipLevels = desc.ArraySize = tex->m_mip_levels;
-            desc.Format = tex->m_format;
-            desc.Usage = D3D11_USAGE_DEFAULT;
-            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            desc.CPUAccessFlags = 0;
-            desc.MiscFlags = 0;
-
-            assert(tex->m_mip_levels == 1);
-            D3D11_SUBRESOURCE_DATA sub_resource;
-            sub_resource.pSysMem = data;
-            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
-            sub_resource.SysMemSlicePitch = 0;
-
-            HR(s_dx11.device->CreateTexture1D(&desc, data ? &sub_resource : nullptr, &tex->m_texture1D));
-        }
-
-        //Create View
-        {
-            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.Format = tex->m_format;
-            desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE1D;
-            desc.Texture1D.MipLevels = 1;
-            desc.Texture1D.MostDetailedMip = 0;
-            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture1D, &desc, &tex->m_view));
-        }
-        break;
-    }
-    case Texture::Dimension_2D:
-    {
-        //Create Texture
-        {
-            D3D11_TEXTURE2D_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.Width = (u32)tex->m_parameters.size.x;
-            desc.Height = (u32)tex->m_parameters.size.y;
-            desc.MipLevels = desc.ArraySize = tex->m_mip_levels;
-            desc.Format = tex->m_format;
-            desc.SampleDesc.Count = 1;
-            desc.SampleDesc.Quality = 0;
-            desc.Usage = D3D11_USAGE_DEFAULT;
-            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            if (tp.render_target)
-                desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
-            desc.CPUAccessFlags = 0;
-            desc.MiscFlags = 0;
-
-            assert(tex->m_mip_levels == 1);
-            D3D11_SUBRESOURCE_DATA sub_resource;
-            sub_resource.pSysMem = data;
-            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
-            sub_resource.SysMemSlicePitch = 0;
-
-            HR(s_dx11.device->CreateTexture2D(&desc, data ? &sub_resource : nullptr, &tex->m_texture2D));
-        }
-
-        //Create View
-        {
-            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.Format = tex->m_format;
-            desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
-            desc.Texture2D.MipLevels = 1;
-            desc.Texture2D.MostDetailedMip = 0;
-            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture2D, &desc, &tex->m_view));
-        }
-        break;
-    }
-    case Texture::Dimension_3D:
-    {
-        //Create Texture
-        {
-            D3D11_TEXTURE3D_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.Width = (u32)tex->m_parameters.size.x;
-            desc.Height = (u32)tex->m_parameters.size.y;
-            desc.Depth = (u32)tex->m_parameters.size.z;
-            desc.MipLevels = tex->m_mip_levels;
-            desc.Format = tex->m_format;
-            desc.Usage = D3D11_USAGE_DEFAULT;
-            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            desc.CPUAccessFlags = 0;
-            desc.MiscFlags = 0;
-
-#if 0
-            D3D11_SUBRESOURCE_DATA sub_resource;
-            sub_resource.pSysMem = data;
-            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
-            sub_resource.SysMemSlicePitch = desc.Height * sub_resource.SysMemPitch;
-#else
-            D3D11_SUBRESOURCE_DATA sub_resource[MAX_MIPS] = {};
-            for (u32 i = 0; i < tex->m_mip_levels; i++)
-            {
-                sub_resource[i].pSysMem = nullptr;
-#if 0
-                sub_resource[i].SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
-                sub_resource[i].SysMemSlicePitch = desc.Height * sub_resource[i].SysMemPitch;
-#else
-                sub_resource[i].SysMemPitch = (desc.Width >> i) * tex->m_parameters.bytes_per_pixel;
-                sub_resource[i].SysMemSlicePitch = (desc.Height >> i) * sub_resource[i].SysMemPitch;
-#endif
-            }
-#endif
-                
-
-            HR(s_dx11.device->CreateTexture3D(&desc, nullptr, &tex->m_texture3D));
-        }
-
-        //Create View
-        {
-            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.Format = tex->m_format;
-            desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE3D;
-            desc.Texture3D.MipLevels = tex->m_mip_levels;
-            desc.Texture3D.MostDetailedMip = 0;
-            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture3D, &desc, &tex->m_view));
-        }
-        break;
-    }
-    default:
-        FAIL;
-    }
-
-    //Create Sampler
-    {
-        D3D11_SAMPLER_DESC desc;
-        ZeroMemory(&desc, sizeof(desc));
-        switch (tp.filter)
-        {
-        case Texture::Filter_Point: desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;   break;
-        case Texture::Filter_Aniso: desc.Filter = D3D11_FILTER_ANISOTROPIC;         break;
-        default: FAIL;              desc.Filter = D3D11_FILTER(0);
-        }
-        switch (tp.mode)
-        {
-        case Texture::Address_Wrap:         desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;         break;
-        case Texture::Address_Mirror:       desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;       break;
-        case Texture::Address_Clamp:        desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;        break;
-        case Texture::Address_Border:       desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;       break;
-        case Texture::Address_MirrorOnce:   desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;  break;
-        default: FAIL;                      desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_MODE(0);      break;
-        }
-        desc.MipLODBias = 0;
-        desc.MaxAnisotropy = 16;
-        desc.ComparisonFunc = D3D11_COMPARISON_LESS;
-        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 0.0f;
-        desc.MinLOD = 0;
-        desc.MaxLOD = 0;
-        HR(s_dx11.device->CreateSamplerState(&desc, &tex->m_sampler));
-    }
-    DEBUG_LOG("Texture Created\n");
-    return true;
+//    VALIDATE_V(texture, false);
+//    VALIDATE_V(*texture == nullptr, false);
+//    //VALIDATE_V(data, false);
+//
+//    DX11Texture* tex = new DX11Texture;
+//    *texture = tex;
+//
+//    tex->m_parameters = tp;
+//    tex->m_mip_levels = mip_levels;
+//    assert(tex->m_parameters.size.x != -1 && tex->m_parameters.size.x != 0);
+//    if (tex->m_parameters.size.z > 0)
+//    {
+//        tex->m_dimension = Texture::Dimension_3D;
+//    }
+//    else if (tex->m_parameters.size.y > 0)
+//    {
+//        tex->m_dimension = Texture::Dimension_2D;
+//    }
+//    else
+//    {
+//        tex->m_dimension = Texture::Dimension_1D;
+//    }
+//
+//    switch (tp.format)
+//    {
+//    case Texture::Format_R11G11B10_FLOAT:       tex->m_format = DXGI_FORMAT_R11G11B10_FLOAT;    break;
+//    case Texture::Format_D32_FLOAT:             tex->m_format = DXGI_FORMAT_D32_FLOAT;          break;
+//    case Texture::Format_D16_UNORM:             tex->m_format = DXGI_FORMAT_D16_UNORM;          break;
+//    case Texture::Format_R8G8B8A8_UNORM:        tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM;     break;
+//    case Texture::Format_R8G8B8A8_UNORM_SRGB:   tex->m_format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;break;
+//    case Texture::Format_R8G8B8A8_UINT:         tex->m_format = DXGI_FORMAT_R8G8B8A8_UINT;      break;
+//    case Texture::Format_R8_UINT:               tex->m_format = DXGI_FORMAT_R8_UINT;            break;
+//    default: FAIL;                              tex->m_format = DXGI_FORMAT_UNKNOWN;            break;
+//    }
+//
+//    switch (tex->m_parameters.type)
+//    {
+//    case Texture::Type_Depth:
+//    {
+//        D3D11_TEXTURE2D_DESC desc;
+//        ZeroMemory(&desc, sizeof(desc));
+//        desc.Width = (u32)tex->m_parameters.size.x;
+//        desc.Height = (u32)tex->m_parameters.size.y;
+//        desc.MipLevels = desc.ArraySize = 1;
+//        switch (tp.format)
+//        {
+//        case Texture::Format_D32_FLOAT:         desc.Format = DXGI_FORMAT_R32_TYPELESS;         break;
+//        case Texture::Format_D16_UNORM:         desc.Format = DXGI_FORMAT_R16_TYPELESS;         break;
+//        default: FAIL; break;
+//        }
+//        desc.SampleDesc.Count = 1;
+//        desc.SampleDesc.Quality = 0;
+//        desc.Usage = D3D11_USAGE_DEFAULT;
+//        desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+//        desc.CPUAccessFlags = 0;
+//        desc.MiscFlags = 0;
+//
+//        HR(s_dx11.device->CreateTexture2D(&desc, NULL, &tex->m_texture2D));
+//    }
+//    {
+//
+//        D3D11_DEPTH_STENCIL_VIEW_DESC desc;
+//        ZeroMemory(&desc, sizeof(desc));
+//        desc.Format = tex->m_format;
+//        desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+//        desc.Texture2D.MipSlice = 0;
+//
+//        // Create the depth stencil view
+//        HR(s_dx11.device->CreateDepthStencilView(
+//            tex->m_texture2D,               // Depth stencil texture
+//            &desc,                          // Depth stencil desc
+//            &tex->m_depth_stencil_view));    // [out] Depth stencil view
+//    }
+//    DEBUG_LOG("Texture Created\n");
+//    return true;
+//    }
+//
+//
+//    assert(tex->m_parameters.bytes_per_pixel);
+//
+//    //Create Texture
+//    switch (tex->m_dimension)
+//    {
+//    case Texture::Dimension_1D:
+//    {
+//        {
+//            D3D11_TEXTURE1D_DESC desc;
+//            ZeroMemory(&desc, sizeof(desc));
+//            desc.Width = (u32)tex->m_parameters.size.x;
+//            desc.MipLevels = desc.ArraySize = tex->m_mip_levels;
+//            desc.Format = tex->m_format;
+//            desc.Usage = D3D11_USAGE_DEFAULT;
+//            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+//            desc.CPUAccessFlags = 0;
+//            desc.MiscFlags = 0;
+//
+//            assert(tex->m_mip_levels == 1);
+//            D3D11_SUBRESOURCE_DATA sub_resource;
+//            sub_resource.pSysMem = data;
+//            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+//            sub_resource.SysMemSlicePitch = 0;
+//
+//            HR(s_dx11.device->CreateTexture1D(&desc, data ? &sub_resource : nullptr, &tex->m_texture1D));
+//        }
+//
+//        //Create View
+//        {
+//            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+//            ZeroMemory(&desc, sizeof(desc));
+//            desc.Format = tex->m_format;
+//            desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE1D;
+//            desc.Texture1D.MipLevels = 1;
+//            desc.Texture1D.MostDetailedMip = 0;
+//            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture1D, &desc, &tex->m_view));
+//        }
+//        break;
+//    }
+//    case Texture::Dimension_2D:
+//    {
+//        //Create Texture
+//        {
+//            D3D11_TEXTURE2D_DESC desc;
+//            ZeroMemory(&desc, sizeof(desc));
+//            desc.Width = (u32)tex->m_parameters.size.x;
+//            desc.Height = (u32)tex->m_parameters.size.y;
+//            desc.MipLevels = desc.ArraySize = tex->m_mip_levels;
+//            desc.Format = tex->m_format;
+//            desc.SampleDesc.Count = 1;
+//            desc.SampleDesc.Quality = 0;
+//            desc.Usage = D3D11_USAGE_DEFAULT;
+//            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+//            if (tp.render_target)
+//                desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+//            desc.CPUAccessFlags = 0;
+//            desc.MiscFlags = 0;
+//
+//            assert(tex->m_mip_levels == 1);
+//            D3D11_SUBRESOURCE_DATA sub_resource;
+//            sub_resource.pSysMem = data;
+//            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+//            sub_resource.SysMemSlicePitch = 0;
+//
+//            HR(s_dx11.device->CreateTexture2D(&desc, data ? &sub_resource : nullptr, &tex->m_texture2D));
+//        }
+//
+//        //Create View
+//        {
+//            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+//            ZeroMemory(&desc, sizeof(desc));
+//            desc.Format = tex->m_format;
+//            desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+//            desc.Texture2D.MipLevels = 1;
+//            desc.Texture2D.MostDetailedMip = 0;
+//            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture2D, &desc, &tex->m_view));
+//        }
+//        break;
+//    }
+//    case Texture::Dimension_3D:
+//    {
+//        //Create Texture
+//        {
+//            D3D11_TEXTURE3D_DESC desc;
+//            ZeroMemory(&desc, sizeof(desc));
+//            desc.Width = (u32)tex->m_parameters.size.x;
+//            desc.Height = (u32)tex->m_parameters.size.y;
+//            desc.Depth = (u32)tex->m_parameters.size.z;
+//            desc.MipLevels = tex->m_mip_levels;
+//            desc.Format = tex->m_format;
+//            desc.Usage = D3D11_USAGE_DEFAULT;
+//            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+//            desc.CPUAccessFlags = 0;
+//            desc.MiscFlags = 0;
+//
+//#if 0
+//            D3D11_SUBRESOURCE_DATA sub_resource;
+//            sub_resource.pSysMem = data;
+//            sub_resource.SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+//            sub_resource.SysMemSlicePitch = desc.Height * sub_resource.SysMemPitch;
+//#else
+//            D3D11_SUBRESOURCE_DATA sub_resource[MAX_MIPS] = {};
+//            for (u32 i = 0; i < tex->m_mip_levels; i++)
+//            {
+//                sub_resource[i].pSysMem = nullptr;
+//#if 0
+//                sub_resource[i].SysMemPitch = desc.Width * tex->m_parameters.bytes_per_pixel;
+//                sub_resource[i].SysMemSlicePitch = desc.Height * sub_resource[i].SysMemPitch;
+//#else
+//                sub_resource[i].SysMemPitch = (desc.Width >> i) * tex->m_parameters.bytes_per_pixel;
+//                sub_resource[i].SysMemSlicePitch = (desc.Height >> i) * sub_resource[i].SysMemPitch;
+//#endif
+//            }
+//#endif
+//                
+//
+//            HR(s_dx11.device->CreateTexture3D(&desc, nullptr, &tex->m_texture3D));
+//        }
+//
+//        //Create View
+//        {
+//            D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+//            ZeroMemory(&desc, sizeof(desc));
+//            desc.Format = tex->m_format;
+//            desc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE3D;
+//            desc.Texture3D.MipLevels = tex->m_mip_levels;
+//            desc.Texture3D.MostDetailedMip = 0;
+//            HR(s_dx11.device->CreateShaderResourceView(tex->m_texture3D, &desc, &tex->m_view));
+//        }
+//        break;
+//    }
+//    default:
+//        FAIL;
+//    }
+//
+//    //Create Sampler
+//    {
+//        D3D11_SAMPLER_DESC desc;
+//        ZeroMemory(&desc, sizeof(desc));
+//        switch (tp.filter)
+//        {
+//        case Texture::Filter_Point: desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;   break;
+//        case Texture::Filter_Aniso: desc.Filter = D3D11_FILTER_ANISOTROPIC;         break;
+//        default: FAIL;              desc.Filter = D3D11_FILTER(0);
+//        }
+//        switch (tp.mode)
+//        {
+//        case Texture::Address_Wrap:         desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;         break;
+//        case Texture::Address_Mirror:       desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;       break;
+//        case Texture::Address_Clamp:        desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;        break;
+//        case Texture::Address_Border:       desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;       break;
+//        case Texture::Address_MirrorOnce:   desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;  break;
+//        default: FAIL;                      desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_MODE(0);      break;
+//        }
+//        desc.MipLODBias = 0;
+//        desc.MaxAnisotropy = 16;
+//        desc.ComparisonFunc = D3D11_COMPARISON_LESS;
+//        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 0.0f;
+//        desc.MinLOD = 0;
+//        desc.MaxLOD = 0;
+//        HR(s_dx11.device->CreateSamplerState(&desc, &tex->m_sampler));
+//    }
+//    DEBUG_LOG("Texture Created\n");
+//    return true;
+return true;
 }
 
 bool UpdateTexture(Texture** texture, u32 mip_slice, void* data, u32 row_pitch_bytes, u32 depth_pitch_bytes)
 {
-    VALIDATE_V(texture, false);
-    VALIDATE_V(*texture, false);
-    DX11Texture* t = reinterpret_cast<DX11Texture*>(*texture);
-    switch (t->m_dimension)
-    {
-    case Texture::Dimension_1D: FAIL; break;
-    case Texture::Dimension_2D: FAIL; break;
-    case Texture::Dimension_3D:
-        s_dx11.device_context->UpdateSubresource(
-            t->m_texture3D,                                         //[in]           ID3D11Resource  *pDstResource,
-            D3D11CalcSubresource(mip_slice, 0, t->m_mip_levels),    //[in]           UINT            DstSubresource,
-            NULL,                                                   //[in, optional] const D3D11_BOX *pDstBox,
-            data,                                                   //[in]           const void      *pSrcData,
-            row_pitch_bytes,                                        //[in]           UINT            SrcRowPitch,
-            depth_pitch_bytes                                       //[in]           UINT            SrcDepthPitch
-        );
-    break;
-    default: FAIL; break;
-    }
+    //VALIDATE_V(texture, false);
+    //VALIDATE_V(*texture, false);
+    //DX11Texture* t = reinterpret_cast<DX11Texture*>(*texture);
+    //switch (t->m_dimension)
+    //{
+    //case Texture::Dimension_1D: FAIL; break;
+    //case Texture::Dimension_2D: FAIL; break;
+    //case Texture::Dimension_3D:
+    //    s_dx11.device_context->UpdateSubresource(
+    //        t->m_texture3D,                                         //[in]           ID3D11Resource  *pDstResource,
+    //        D3D11CalcSubresource(mip_slice, 0, t->m_mip_levels),    //[in]           UINT            DstSubresource,
+    //        NULL,                                                   //[in, optional] const D3D11_BOX *pDstBox,
+    //        data,                                                   //[in]           const void      *pSrcData,
+    //        row_pitch_bytes,                                        //[in]           UINT            SrcRowPitch,
+    //        depth_pitch_bytes                                       //[in]           UINT            SrcDepthPitch
+    //    );
+    //break;
+    //default: FAIL; break;
+    //}
 
+    //return true;
     return true;
 }
 
@@ -580,7 +589,7 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
             desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
 
-            HR(s_dx12.device->CreateCommittedResource(heap_props, D3D12_HEAP_FLAG_NONE, desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&buf->m_buffer)));
+            HR(s_dx12.device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&buf->m_buffer)));
 
             // Copy the triangle data to the vertex buffer.
             UINT8* pVertexDataBegin;
@@ -590,10 +599,9 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
             buf->m_buffer->Unmap(0, nullptr);
 
             // Initialize the vertex buffer view.
-            D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
-            vertex_buffer_view.BufferLocation = buf->m_buffer->GetGPUVirtualAddress();
-            vertex_buffer_view.StrideInBytes = element_size;
-            vertex_buffer_view.SizeInBytes = total_bytes;
+            s_dx12.vertex_buffer_view.BufferLocation = buf->m_buffer->GetGPUVirtualAddress();
+            s_dx12.vertex_buffer_view.StrideInBytes = element_size;
+            s_dx12.vertex_buffer_view.SizeInBytes = total_bytes;
         }
         DEBUG_LOG("Created and Uploaded data to gpu buffer: element: %i size: %i", element_size, count);
 
@@ -647,52 +655,52 @@ void GpuBuffer::Upload(const void* data, const size_t count, const u32 element_s
 
 void GpuBuffer::Bind(u32 slot, GpuBuffer::BindLocation binding)
 {
-    DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(this);
-    switch (m_type)
-    {
-    case GpuBuffer::Type::Constant:
-    {
-        switch (binding)
-        {
-        case GpuBuffer::BindLocation::Vertex:
-            s_dx11.device_context->VSSetConstantBuffers(slot, 1, &buf->m_buffer);
-            break;
-        case GpuBuffer::BindLocation::Pixel:
-            s_dx11.device_context->PSSetConstantBuffers(slot, 1, &buf->m_buffer);
-            break;
-        case GpuBuffer::BindLocation::All:
-            s_dx11.device_context->VSSetConstantBuffers(slot, 1, &buf->m_buffer);
-            s_dx11.device_context->PSSetConstantBuffers(slot, 1, &buf->m_buffer);
-            break;
-        default:
-            FAIL;
-            break;
-        }
-        break;
-    }
-    case GpuBuffer::Type::Structure:
-    {
-        switch (binding)
-        {
-        case GpuBuffer::BindLocation::Vertex:
-            s_dx11.device_context->VSSetShaderResources(slot, 1, &buf->structure_resource_view);
-            break;
-        case GpuBuffer::BindLocation::Pixel:
-            s_dx11.device_context->PSSetShaderResources(slot, 1, &buf->structure_resource_view);
-            break;
-        case GpuBuffer::BindLocation::All:
-            s_dx11.device_context->VSSetShaderResources(slot, 1, &buf->structure_resource_view);
-            s_dx11.device_context->PSSetShaderResources(slot, 1, &buf->structure_resource_view);
-            break;
-        default:
-            FAIL;
-            break;
-        }
-        break;
-    }
-    default:
-        FAIL;
-    }
+    //DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(this);
+    //switch (m_type)
+    //{
+    //case GpuBuffer::Type::Constant:
+    //{
+    //    switch (binding)
+    //    {
+    //    case GpuBuffer::BindLocation::Vertex:
+    //        s_dx11.device_context->VSSetConstantBuffers(slot, 1, &buf->m_buffer);
+    //        break;
+    //    case GpuBuffer::BindLocation::Pixel:
+    //        s_dx11.device_context->PSSetConstantBuffers(slot, 1, &buf->m_buffer);
+    //        break;
+    //    case GpuBuffer::BindLocation::All:
+    //        s_dx11.device_context->VSSetConstantBuffers(slot, 1, &buf->m_buffer);
+    //        s_dx11.device_context->PSSetConstantBuffers(slot, 1, &buf->m_buffer);
+    //        break;
+    //    default:
+    //        FAIL;
+    //        break;
+    //    }
+    //    break;
+    //}
+    //case GpuBuffer::Type::Structure:
+    //{
+    //    switch (binding)
+    //    {
+    //    case GpuBuffer::BindLocation::Vertex:
+    //        s_dx11.device_context->VSSetShaderResources(slot, 1, &buf->structure_resource_view);
+    //        break;
+    //    case GpuBuffer::BindLocation::Pixel:
+    //        s_dx11.device_context->PSSetShaderResources(slot, 1, &buf->structure_resource_view);
+    //        break;
+    //    case GpuBuffer::BindLocation::All:
+    //        s_dx11.device_context->VSSetShaderResources(slot, 1, &buf->structure_resource_view);
+    //        s_dx11.device_context->PSSetShaderResources(slot, 1, &buf->structure_resource_view);
+    //        break;
+    //    default:
+    //        FAIL;
+    //        break;
+    //    }
+    //    break;
+    //}
+    //default:
+    //    FAIL;
+    //}
 }
 
 bool CreateGpuBuffer(GpuBuffer** buffer, const char* name, bool is_dynamic, GpuBuffer::Type type)
@@ -709,11 +717,11 @@ bool CreateGpuBuffer(GpuBuffer** buffer, const char* name, bool is_dynamic, GpuB
 
 void DeleteBuffer(GpuBuffer** buffer)
 {
-    VALIDATE(buffer);
-    DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(*buffer);
-    SafeRelease(buf->m_buffer);
-    delete buf;
-    DEBUG_LOG("GPU Buffer deleted %i, %i\n", m_target, m_handle);
+    //VALIDATE(buffer);
+    //DX11GpuBuffer* buf = reinterpret_cast<DX11GpuBuffer*>(*buffer);
+    //SafeRelease(buf->m_buffer);
+    //delete buf;
+    //DEBUG_LOG("GPU Buffer deleted %i, %i\n", m_target, m_handle);
 }
 
 
@@ -795,7 +803,7 @@ bool CreateShader(Shader** s,
 {
     assert(s);
     assert(*s == nullptr);
-    DX12Shader* shader = new DX12Shader;
+    DX12Shader* shader = new DX12Shader();
     (*s) = reinterpret_cast<DX12Shader*>(shader);
 
     ConvertMultibyteToWideChar(shader->m_vertex_filename, vertex_filename);
@@ -831,7 +839,7 @@ Shader::~Shader()
 }
 bool Shader::CompileShader(const std::wstring& file_name, Type shader_type)
 {
-    DX12Shader* shader = reinterpret_cast<DX12Shader*>(this);
+    DX12Shader* shader = static_cast<DX12Shader*>(this);
     bool failed = false;
 #if 1
     D3D_SHADER_MACRO* shader_macros = nullptr;
@@ -849,14 +857,15 @@ bool Shader::CompileShader(const std::wstring& file_name, Type shader_type)
     case Type_Vertex:
         entry_point = "Vertex_Main";
         target_version = "vs_5_0";
-        *shader_blob = shader->m_vertex_blob;
+        shader_blob = &shader->m_vertex_blob;
         break;
     case Type_Pixel:
         entry_point = "Pixel_Main";
         target_version = "ps_5_0";
-        *shader_blob = shader->m_pixel_blob;
+        shader_blob = &shader->m_pixel_blob;
         break;
     default:
+        shader_blob = nullptr;
         FAIL;
     }
 
@@ -869,7 +878,8 @@ bool Shader::CompileShader(const std::wstring& file_name, Type shader_type)
 #endif
 
     //Create Blob
-    SafeRelease(*shader_blob);
+    if (shader_blob)
+        SafeRelease(*shader_blob);
     ID3DBlob* errors;
     DX11IncludeManager include_manager;
     HRESULT compile_result = s_dx12.D3DCompileFromFileFunc(
@@ -886,12 +896,13 @@ bool Shader::CompileShader(const std::wstring& file_name, Type shader_type)
 
     if (!shader_blob || !!errors || FAILED(compile_result))
     {
-        std::wstring info_string;
+        std::string info_string;
         info_string.resize(errors->GetBufferSize());
         memcpy(info_string.data(), errors->GetBufferPointer(), errors->GetBufferSize());
-        std::wstring error_title = m_vertex_filename.c_str();
-        error_title += L" Compilation Error: ";
-        DebugPrint((error_title + info_string + L"\n").c_str());
+        std::string error_title;
+        ConvertWideCharToMultiByte(error_title, m_vertex_filename.c_str());
+        error_title += " Compilation Error: ";
+        DebugPrint((error_title + info_string + "\n").c_str());
 
         SDL_MessageBoxButtonData buttons[] = {
             //{ /* .flags, .buttonid, .text */        0, 0, "Continue" },
@@ -907,7 +918,7 @@ bool Shader::CompileShader(const std::wstring& file_name, Type shader_type)
             }
             else if (buttons[buttonID].buttonid == 1)//NOTE: Continue button
             {
-                return;
+                return false;
             }
         }
     }
@@ -1010,32 +1021,32 @@ void Shader::CheckForUpdate()
 
 
 
-void CreateRenderTargetView(ID3D12RenderTargetView** rtv, DXGI_FORMAT format, ID3D11Texture2D* texture)
-{
-    assert(rtv);
-    if (*rtv)
-    {
-        SafeRelease(*rtv);
-        *rtv = nullptr;
-    }
-
-    D3D11_RENDER_TARGET_VIEW_DESC desc;
-    ZeroMemory(&desc, sizeof(desc));
-    desc.Format = format;
-    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    desc.Texture2D.MipSlice = 0;
-
-    VERIFY(SUCCEEDED(s_dx11.device->CreateRenderTargetView(
-        texture,    //[in]            ID3D11Resource* pResource,
-        &desc,      //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
-        rtv         //[out, optional] ID3D11RenderTargetView** ppRTView
-    )));
-}
-void CreateRenderTargetView(ID3D11RenderTargetView** rtv, Texture::Index texture_index)
-{
-    DX11Texture* t = reinterpret_cast<DX11Texture*>(g_renderer.textures[texture_index]);
-    CreateRenderTargetView(rtv, t->m_format, t->m_texture2D);
-}
+//void CreateRenderTargetView(ID3D12RenderTargetView** rtv, DXGI_FORMAT format, ID3D11Texture2D* texture)
+//{
+//    assert(rtv);
+//    if (*rtv)
+//    {
+//        SafeRelease(*rtv);
+//        *rtv = nullptr;
+//    }
+//
+//    D3D11_RENDER_TARGET_VIEW_DESC desc;
+//    ZeroMemory(&desc, sizeof(desc));
+//    desc.Format = format;
+//    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+//    desc.Texture2D.MipSlice = 0;
+//
+//    VERIFY(SUCCEEDED(s_dx11.device->CreateRenderTargetView(
+//        texture,    //[in]            ID3D11Resource* pResource,
+//        &desc,      //[in, optional]  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
+//        rtv         //[out, optional] ID3D11RenderTargetView** ppRTView
+//    )));
+//}
+//void CreateRenderTargetView(ID3D11RenderTargetView** rtv, Texture::Index texture_index)
+//{
+//    DX11Texture* t = reinterpret_cast<DX11Texture*>(g_renderer.textures[texture_index]);
+//    CreateRenderTargetView(rtv, t->m_format, t->m_texture2D);
+//}
 
 
 typedef HRESULT(*D3DCompileFunc)        (LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
@@ -1095,57 +1106,56 @@ void InitializeImGui()
 
 void UpdateSwapchain(const Vec2I& window_size)
 {
-    SafeRelease(s_dx11.swap_chain.render_target_view);
-    HR(s_dx11.swap_chain.handle->ResizeBuffers(
-        0,                  //UINT        BufferCount, IS THIS RIGHT???
-        (UINT)window_size.x,//UINT        Width,
-        (UINT)window_size.y,//UINT        Height,
-        DXGI_FORMAT_UNKNOWN,//DXGI_FORMAT_R8G8B8A8_UNORM, //DXGI_FORMAT NewFormat,
-        0                   //UINT        SwapChainFlags
-    ));
+    //SafeRelease(s_dx11.swap_chain.render_target_view);
+    //HR(s_dx11.swap_chain.handle->ResizeBuffers(
+    //    0,                  //UINT        BufferCount, IS THIS RIGHT???
+    //    (UINT)window_size.x,//UINT        Width,
+    //    (UINT)window_size.y,//UINT        Height,
+    //    DXGI_FORMAT_UNKNOWN,//DXGI_FORMAT_R8G8B8A8_UNORM, //DXGI_FORMAT NewFormat,
+    //    0                   //UINT        SwapChainFlags
+    //));
 
-    DXGI_SWAP_CHAIN_DESC desc;
-    s_dx11.swap_chain.handle->GetDesc(&desc);
-    assert(desc.BufferDesc.Width == window_size.x);
-    assert(desc.BufferDesc.Height == window_size.y);
-    s_dx11.swap_chain.size.x = desc.BufferDesc.Width;
-    s_dx11.swap_chain.size.y = desc.BufferDesc.Height;
-    s_dx11.swap_chain.refresh_rate = desc.BufferDesc.RefreshRate.Numerator;
-    s_dx11.swap_chain.sample_count = desc.SampleDesc.Count;
-    s_dx11.swap_chain.sample_quality = desc.SampleDesc.Quality;
+    //DXGI_SWAP_CHAIN_DESC desc;
+    //s_dx11.swap_chain.handle->GetDesc(&desc);
+    //assert(desc.BufferDesc.Width == window_size.x);
+    //assert(desc.BufferDesc.Height == window_size.y);
+    //s_dx11.swap_chain.size.x = desc.BufferDesc.Width;
+    //s_dx11.swap_chain.size.y = desc.BufferDesc.Height;
+    //s_dx11.swap_chain.refresh_rate = desc.BufferDesc.RefreshRate.Numerator;
+    //s_dx11.swap_chain.sample_count = desc.SampleDesc.Count;
+    //s_dx11.swap_chain.sample_quality = desc.SampleDesc.Quality;
 
 
-    ID3D11Texture2D* backbuffer;
-    VERIFY(SUCCEEDED(s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer))));
-    CreateRenderTargetView(&s_dx11.swap_chain.render_target_view, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, backbuffer);
+    //ID3D11Texture2D* backbuffer;
+    //VERIFY(SUCCEEDED(s_dx11.swap_chain.handle->GetBuffer(0, IID_PPV_ARGS(&backbuffer))));
+    //CreateRenderTargetView(&s_dx11.swap_chain.render_target_view, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, backbuffer);
 
-    D3D11_TEXTURE2D_DESC backbuffer_desc = {};
-    backbuffer->GetDesc(&backbuffer_desc);
-    SafeRelease(backbuffer);
-    {
-        Texture** t = &g_renderer.textures[Texture::Index_Backbuffer_Depth];
-        if (*t)
-        {
-            Texture::TextureParams tp = (*t)->m_parameters;
-            tp.size.xy = window_size;
-            assert(tp.size.z == 0);
-            DeleteTexture(t);
-            CreateTexture(t, tp, nullptr);
-        }
-    }
-    {
-        Texture** t = &g_renderer.textures[Texture::Index_Backbuffer_HDR];
-        if (*t)
-        {
-            Texture::TextureParams tp = (*t)->m_parameters;
-            tp.size.xy = window_size;
-            assert(tp.size.z == 0);
-            DeleteTexture(t);
-            CreateTexture(t, tp, nullptr);
-            CreateRenderTargetView(&s_dx11.hdr_rtv, Texture::Index_Backbuffer_HDR);
-        }
-    }
-
+    //D3D11_TEXTURE2D_DESC backbuffer_desc = {};
+    //backbuffer->GetDesc(&backbuffer_desc);
+    //SafeRelease(backbuffer);
+    //{
+    //    Texture** t = &g_renderer.textures[Texture::Index_Backbuffer_Depth];
+    //    if (*t)
+    //    {
+    //        Texture::TextureParams tp = (*t)->m_parameters;
+    //        tp.size.xy = window_size;
+    //        assert(tp.size.z == 0);
+    //        DeleteTexture(t);
+    //        CreateTexture(t, tp, nullptr);
+    //    }
+    //}
+    //{
+    //    Texture** t = &g_renderer.textures[Texture::Index_Backbuffer_HDR];
+    //    if (*t)
+    //    {
+    //        Texture::TextureParams tp = (*t)->m_parameters;
+    //        tp.size.xy = window_size;
+    //        assert(tp.size.z == 0);
+    //        DeleteTexture(t);
+    //        CreateTexture(t, tp, nullptr);
+    //        CreateRenderTargetView(&s_dx11.hdr_rtv, Texture::Index_Backbuffer_HDR);
+    //    }
+    //}
 }
 
 //#pragma comment(lib, "dxgi.lib")
@@ -1286,7 +1296,7 @@ void InitializeVideo()
         //    &swap_chain_desc,
         //    &s_dx12.swap_chain.handle));
         IDXGISwapChain* swap_chain1;
-        HR(s_dx12.factory4->CreateSwapChain(
+        HR(s_dx12.factory->CreateSwapChain(
             command_queue,        // Swap chain needs the queue so that it can force a flush on it.
             &swap_chain_desc,
             &swap_chain1));
@@ -1297,7 +1307,6 @@ void InitializeVideo()
     UINT frame_index = s_dx12.swap_chain.handle->GetCurrentBackBufferIndex();
 
     // Create descriptor heaps.
-    UINT rtv_descriptor_size;
     {
         // Describe and create a render target view (RTV) descriptor heap.
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -1306,7 +1315,16 @@ void InitializeVideo()
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         HR(s_dx12.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&s_dx12.rtv_heap)));
 
-        rtv_descriptor_size = s_dx12.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        s_dx12.rtv_descriptor_size = s_dx12.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    }
+    {
+        // Describe and create the shader resource view / constant buffer view / unordered access view
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.NumDescriptors = 1;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        HR(s_dx12.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&s_dx12.srv_heap)));
+        s_dx12.gpu_handle = s_dx12.srv_heap->GetGPUDescriptorHandleForHeapStart();
     }
 
     // Create frame resources.
@@ -1321,13 +1339,8 @@ void InitializeVideo()
             HR(s_dx12.swap_chain.handle->GetBuffer(i, IID_PPV_ARGS(&s_dx12.render_targets[i])));
             s_dx12.device->CreateRenderTargetView(s_dx12.render_targets[i], nullptr, s_dx12.rtv_handle);
             //s_dx12.rtv_handle.Offset(1, rtv_descriptor_size);
-            s_dx12.rtv_handle.ptr = SIZE_T(INT64(s_dx12.rtv_handle.ptr) + INT64(1) * INT64(rtv_descriptor_size)):
+            s_dx12.rtv_handle.ptr = SIZE_T(INT64(s_dx12.rtv_handle.ptr) + INT64(1) * INT64(s_dx12.rtv_descriptor_size));
         }
-    }
-    {
-        //THIS IS CURRENTLY ONLY USED BY IMGUI...
-        // WHAT IS THIS !?
-        s_dx12.gpu_handle = s_dx12.rtv_heap->GetGPUDescriptorHandleForHeapStart();
     }
 
     HR(s_dx12.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&s_dx12.command_allocator)));
@@ -1348,8 +1361,21 @@ void InitializeVideo()
     
     // Create an empty root signature.
     {
-        CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-        rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        // D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+        // rootSignatureDesc.NumParameters = 0;
+        // rootSignatureDesc.pParameters = nullptr;
+        // rootSignatureDesc.NumStaticSamplers = 0;
+        // rootSignatureDesc.pStaticSamplers = nullptr;
+        // rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+        D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+            .NumParameters = 0,
+            .pParameters = nullptr,
+            .NumStaticSamplers = 0,
+            .pStaticSamplers = nullptr,
+            .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
+        };
+
 
         ID3DBlob* signature;
         ID3DBlob* error;
@@ -1396,10 +1422,10 @@ void InitializeVideo()
     }
 
     {
-        DX12Shader* shader = reinterpret_cast<DX12Shader*>(g_renderer.shaders[+Shader::Index_Cube]);
+        DX12Shader* shader = static_cast<DX12Shader*>(g_renderer.shaders[+Shader::Index_Hello_Triangle]);
         // Describe and create the graphics pipeline state object (PSO).
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-        psoDesc.InputLayout = { shader->m_local_layout, arrsize(shader->m_local_layout) };
+        psoDesc.InputLayout = { shader->m_local_layout, shader->m_vertex_component_count };
         psoDesc.pRootSignature = s_dx12.root_signature;
         psoDesc.VS = { reinterpret_cast<UINT8*>(shader->m_vertex_blob->GetBufferPointer()), shader->m_vertex_blob->GetBufferSize()  };
         psoDesc.PS = { reinterpret_cast<UINT8*>(shader->m_pixel_blob->GetBufferPointer()),  shader->m_pixel_blob->GetBufferSize()   };
@@ -1412,15 +1438,54 @@ void InitializeVideo()
         psoDesc.NumRenderTargets = 1;
         psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; //TODO: Render to a secondary HDR buffer
         psoDesc.SampleDesc.Count = 1;
-        HR(s_dx12.device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_dx12.pipeline_state[PipelineState::Cube_Full])));
+        HR(s_dx12.device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_dx12.pipeline_state[+PipelineState::Cube_Full])));
     }
 
     // Create the command list.
-    HR(s_dx12.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_dx12.command_allocator, s_dx12.pipeline_state[PipelineState::Cube_Full], IID_PPV_ARGS(&s_dx12.command_list)));
+    HR(s_dx12.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_dx12.command_allocator, s_dx12.pipeline_state[+PipelineState::Cube_Full], IID_PPV_ARGS(&s_dx12.command_list)));
 
     // Command lists are created in the recording state, but there is nothing
     // to record yet. The main loop expects it to be closed, so close it now.
     HR(s_dx12.command_list->Close());
+
+    // Create the vertex buffer.
+    {
+        // Define the geometry for a triangle.
+        Vertex triangleVertices[] =
+        {
+            { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+            { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+            { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+        };
+
+        const UINT vertexBufferSize = sizeof(triangleVertices);
+
+        // Note: using upload heaps to transfer static data like vert buffers is not 
+        // recommended. Every time the GPU needs it, the upload heap will be marshalled 
+        // over. Please read up on Default Heap usage. An upload heap is used here for 
+        // code simplicity and because there are very few verts to actually transfer.
+        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
+        auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+        ThrowIfFailed(m_device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&m_vertexBuffer)));
+
+        // Copy the triangle data to the vertex buffer.
+        UINT8* pVertexDataBegin;
+        CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
+        ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+        memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
+        m_vertexBuffer->Unmap(0, nullptr);
+
+        // Initialize the vertex buffer view.
+        m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+        m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+        m_vertexBufferView.SizeInBytes = vertexBufferSize;
+    }
 
 
 #if 0
@@ -1586,40 +1651,10 @@ void RenderUpdate(Vec2I window_size, float deltaTime)
 #if 1
     //DX12 Implementation:
 
-    // Command list allocators can only be reset when the associated 
-    // command lists have finished execution on the GPU; apps should use 
-    // fences to determine GPU execution progress.
-    HR(s_dx12.command_allocator->Reset());
+    //TODO: fix this:
+    s_dx12.viewport.Height = (float)window_size.y;
+    s_dx12.viewport.Width = (float)window_size.x;
 
-    // However, when ExecuteCommandList() is called on a particular command 
-    // list, that command list can then be reset at any time and must be before 
-    // re-recording.
-    HR(s_dx12.command_allocator->Reset(s_dx12.command_allocator.Get(), s_dx12.pipeline_state.Get()));
-
-    // Set necessary state.
-    s_dx12.command_list->SetGraphicsRootSignature(s_dx12.root_signature.Get());
-    s_dx12.command_list->RSSetViewports(1, &s_dx12.m_viewport);
-    s_dx12.command_list->RSSetScissorRects(1, &m_scissorRect);
-
-    // Indicate that the back buffer will be used as a render target.
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    m_commandList->ResourceBarrier(1, &barrier);
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
-    m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-
-    // Record commands.
-    const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-    m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-    m_commandList->DrawInstanced(3, 1, 0, 0);
-
-    // Indicate that the back buffer will now be used to present.
-    barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    m_commandList->ResourceBarrier(1, &barrier);
-
-    ThrowIfFailed(m_commandList->Close());
 #else
     //Vec2I window_size;
     //SDL_GetWindowSizeInPixels(g_renderer.SDL_Context, &window_size.x, &window_size.y);
@@ -1836,182 +1871,242 @@ void TextureCube::Bind()
 
 void RenderPresent()
 {
-    s_dx11.swap_chain.handle->Present(1, 0);
+    s_dx12.swap_chain.handle->Present(1, 0);
 }
 
 void DrawPathTracedVoxels()
 {
-    ID3D11DeviceContext* context = s_dx11.device_context;
-    DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Voxel]);
-    DX11Texture* voxel_indices  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices]);
-    DX11Texture* voxel_indices_mip1 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip1]);
-    DX11Texture* voxel_indices_mip2 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip2]);
-    DX11Texture* voxel_indices_mip3 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip3]);
-    DX11Texture* voxel_indices_mip4 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip4]);
-    DX11Texture* voxel_indices_mip5 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip5]);
-    DX11Texture* voxel_indices_mip6 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip6]);
-    DX11Texture* random         = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Random]);
-    DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
-    DX11Texture* depth  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
-    DX11Texture* target = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
+    //ID3D11DeviceContext* context = s_dx11.device_context;
+    //DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Voxel]);
+    //DX11Texture* voxel_indices  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices]);
+    //DX11Texture* voxel_indices_mip1 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip1]);
+    //DX11Texture* voxel_indices_mip2 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip2]);
+    //DX11Texture* voxel_indices_mip3 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip3]);
+    //DX11Texture* voxel_indices_mip4 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip4]);
+    //DX11Texture* voxel_indices_mip5 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip5]);
+    //DX11Texture* voxel_indices_mip6 = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Voxel_Indices_mip6]);
+    //DX11Texture* random         = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Random]);
+    //DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
+    //DX11Texture* depth  = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
+    //DX11Texture* target = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
 
-    //Bindings
-    {
-        g_renderer.structure_voxel_materials->Bind(SLOT_VOXEL_MATERIALS, GpuBuffer::BindLocation::Pixel);
-    }
+    ////Bindings
+    //{
+    //    g_renderer.structure_voxel_materials->Bind(SLOT_VOXEL_MATERIALS, GpuBuffer::BindLocation::Pixel);
+    //}
 
-    //Input Assembler
-    {
-        context->IASetInputLayout(shader->m_vertex_input_layout);
-        UINT strides[] = { sizeof(Vec2), };
-        UINT offsets[] = { 0, };
-        context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
-        context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    }
+    ////Input Assembler
+    //{
+    //    context->IASetInputLayout(shader->m_vertex_input_layout);
+    //    UINT strides[] = { sizeof(Vec2), };
+    //    UINT offsets[] = { 0, };
+    //    context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
+    //    context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    //}
 
-    //Vertex Shader
-    {
-        context->VSSetShader(shader->m_vertex_shader, NULL, 0);
-    }
-    //Hull shader
-    {
-        context->HSSetShader(nullptr, nullptr, 0);
-    }
-    //Domain shader
-    {
-        context->DSSetShader(nullptr, nullptr, 0);
-    }
-    //Geometry shader
-    {
-        context->GSSetShader(nullptr, nullptr, 0);
-    }
+    ////Vertex Shader
+    //{
+    //    context->VSSetShader(shader->m_vertex_shader, NULL, 0);
+    //}
+    ////Hull shader
+    //{
+    //    context->HSSetShader(nullptr, nullptr, 0);
+    //}
+    ////Domain shader
+    //{
+    //    context->DSSetShader(nullptr, nullptr, 0);
+    //}
+    ////Geometry shader
+    //{
+    //    context->GSSetShader(nullptr, nullptr, 0);
+    //}
 
-    //Rasterizer
-    {
-        context->RSSetState(s_dx11.rasterizer_voxel);
-        D3D11_VIEWPORT view_port = {
-            .TopLeftX = 0.0f,
-            .TopLeftY = 0.0f,
-            .Width = (float)s_dx11.swap_chain.size.x,
-            .Height = (float)s_dx11.swap_chain.size.y,
-            .MinDepth = 0.0f,
-            .MaxDepth = 1.0f,
-        };
-        context->RSSetViewports(1, &view_port);
-    }
+    ////Rasterizer
+    //{
+    //    context->RSSetState(s_dx11.rasterizer_voxel);
+    //    D3D11_VIEWPORT view_port = {
+    //        .TopLeftX = 0.0f,
+    //        .TopLeftY = 0.0f,
+    //        .Width = (float)s_dx11.swap_chain.size.x,
+    //        .Height = (float)s_dx11.swap_chain.size.y,
+    //        .MinDepth = 0.0f,
+    //        .MaxDepth = 1.0f,
+    //    };
+    //    context->RSSetViewports(1, &view_port);
+    //}
 
-    //Pixel Shader
-    {
-        context->PSSetShader(shader->m_pixel_shader, NULL, 0);
-        context->PSSetSamplers(SLOT_VOXEL_INDICES_SAMPLER,  1, &voxel_indices->m_sampler);
-        context->PSSetSamplers(SLOT_RANDOM_TEXTURE_SAMPLER, 1, &random->m_sampler);
+    ////Pixel Shader
+    //{
+    //    context->PSSetShader(shader->m_pixel_shader, NULL, 0);
+    //    context->PSSetSamplers(SLOT_VOXEL_INDICES_SAMPLER,  1, &voxel_indices->m_sampler);
+    //    context->PSSetSamplers(SLOT_RANDOM_TEXTURE_SAMPLER, 1, &random->m_sampler);
 
-        context->PSSetShaderResources(SLOT_VOXEL_INDICES,   1, &voxel_indices->m_view);
-        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP1,  1, &voxel_indices_mip1->m_view);
-        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP2,  1, &voxel_indices_mip2->m_view);
-        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP3,  1, &voxel_indices_mip3->m_view);
-        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP4,  1, &voxel_indices_mip4->m_view);
-        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP5,  1, &voxel_indices_mip5->m_view);
-        //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP6,  1, &voxel_indices_mip6->m_view);
-        context->PSSetShaderResources(SLOT_RANDOM_TEXTURE,  1, &random->m_view);
-    }
+    //    context->PSSetShaderResources(SLOT_VOXEL_INDICES,   1, &voxel_indices->m_view);
+    //    //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP1,  1, &voxel_indices_mip1->m_view);
+    //    //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP2,  1, &voxel_indices_mip2->m_view);
+    //    //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP3,  1, &voxel_indices_mip3->m_view);
+    //    //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP4,  1, &voxel_indices_mip4->m_view);
+    //    //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP5,  1, &voxel_indices_mip5->m_view);
+    //    //context->PSSetShaderResources(SLOT_VOXEL_INDICES_MIP6,  1, &voxel_indices_mip6->m_view);
+    //    context->PSSetShaderResources(SLOT_RANDOM_TEXTURE,  1, &random->m_view);
+    //}
 
-    //Output Merger
-    {
-        context->OMSetDepthStencilState(s_dx11.depth_stencil_state_depth, 1);
-        context->OMSetRenderTargets(1, &s_dx11.hdr_rtv, depth->m_depth_stencil_view);
-        context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
-    }
+    ////Output Merger
+    //{
+    //    context->OMSetDepthStencilState(s_dx11.depth_stencil_state_depth, 1);
+    //    context->OMSetRenderTargets(1, &s_dx11.hdr_rtv, depth->m_depth_stencil_view);
+    //    context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
+    //}
 
-    //Compute shader
-    {
-        context->CSSetShader(nullptr, nullptr, 0);
-    }
+    ////Compute shader
+    //{
+    //    context->CSSetShader(nullptr, nullptr, 0);
+    //}
 
-    //Draw
-    {
-        context->Draw((UINT)vb->m_count, 0);
-    }
+    ////Draw
+    //{
+    //    context->Draw((UINT)vb->m_count, 0);
+    //}
 }
 
 void DrawFinal()
 {
-    ID3D11DeviceContext* context = s_dx11.device_context;
-    DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Final_Draw]);
-    DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
-    DX11Texture* previous_target= reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
-    DX11Texture* previous_depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
+    //ID3D11DeviceContext* context = s_dx11.device_context;
+    //DX11Shader* shader          = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+Shader::Index_Final_Draw]);
+    //DX11GpuBuffer* vb           = reinterpret_cast<DX11GpuBuffer*>(g_renderer.voxel_vb);
+    //DX11Texture* previous_target= reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
+    //DX11Texture* previous_depth = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
 
-    //Input Assembler
-    {
-        context->IASetInputLayout(shader->m_vertex_input_layout);
-        UINT strides[] = { sizeof(Vec2), };
-        UINT offsets[] = { 0, };
-        context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
-        context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    }
+    ////Input Assembler
+    //{
+    //    context->IASetInputLayout(shader->m_vertex_input_layout);
+    //    UINT strides[] = { sizeof(Vec2), };
+    //    UINT offsets[] = { 0, };
+    //    context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
+    //    context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    //}
 
-    //Vertex Shader
-    {
-        context->VSSetShader(shader->m_vertex_shader, NULL, 0);
-    }
-    //Hull shader
-    {
-        context->HSSetShader(nullptr, nullptr, 0);
-    }
-    //Domain shader
-    {
-        context->DSSetShader(nullptr, nullptr, 0);
-    }
-    //Geometry shader
-    {
-        context->GSSetShader(nullptr, nullptr, 0);
-    }
+    ////Vertex Shader
+    //{
+    //    context->VSSetShader(shader->m_vertex_shader, NULL, 0);
+    //}
+    ////Hull shader
+    //{
+    //    context->HSSetShader(nullptr, nullptr, 0);
+    //}
+    ////Domain shader
+    //{
+    //    context->DSSetShader(nullptr, nullptr, 0);
+    //}
+    ////Geometry shader
+    //{
+    //    context->GSSetShader(nullptr, nullptr, 0);
+    //}
 
-    //Rasterizer
-    {
-        context->RSSetState(s_dx11.rasterizer_voxel);
-        D3D11_VIEWPORT view_port = {
-            .TopLeftX = 0.0f,
-            .TopLeftY = 0.0f,
-            .Width = (float)s_dx11.swap_chain.size.x,
-            .Height = (float)s_dx11.swap_chain.size.y,
-            .MinDepth = 0.0f,
-            .MaxDepth = 1.0f,
-        };
-        context->RSSetViewports(1, &view_port);
-    }
+    ////Rasterizer
+    //{
+    //    context->RSSetState(s_dx11.rasterizer_voxel);
+    //    D3D11_VIEWPORT view_port = {
+    //        .TopLeftX = 0.0f,
+    //        .TopLeftY = 0.0f,
+    //        .Width = (float)s_dx11.swap_chain.size.x,
+    //        .Height = (float)s_dx11.swap_chain.size.y,
+    //        .MinDepth = 0.0f,
+    //        .MaxDepth = 1.0f,
+    //    };
+    //    context->RSSetViewports(1, &view_port);
+    //}
 
-    //NOTE(CSH): The output merger steps need to be done first for the final draw since 
-    //we are using the previously bound render target as the input to the this.
-    //Output Merger
-    {
-        //context->OMSetDepthStencilState(s_dx11.swap_chain.depth_stencil_state, 1);
-        context->OMSetDepthStencilState(s_dx11.depth_stencil_state_no_depth, 1);
-        context->OMSetRenderTargets(1, &s_dx11.swap_chain.render_target_view, NULL);
-        context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
-    }
+    ////NOTE(CSH): The output merger steps need to be done first for the final draw since 
+    ////we are using the previously bound render target as the input to the this.
+    ////Output Merger
+    //{
+    //    //context->OMSetDepthStencilState(s_dx11.swap_chain.depth_stencil_state, 1);
+    //    context->OMSetDepthStencilState(s_dx11.depth_stencil_state_no_depth, 1);
+    //    context->OMSetRenderTargets(1, &s_dx11.swap_chain.render_target_view, NULL);
+    //    context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
+    //}
 
-    //Pixel Shader
-    {
-        context->PSSetShader(shader->m_pixel_shader, NULL, 0);
-        context->PSSetSamplers(SLOT_PREVIOUS_TARGET_SAMPLER,1, &previous_target->m_sampler);
-        context->PSSetSamplers(SLOT_PREVIOUS_DEPTH_SAMPLER, 1, &previous_depth->m_sampler);
-        context->PSSetShaderResources(SLOT_PREVIOUS_TARGET, 1, &previous_target->m_view);
-        context->PSSetShaderResources(SLOT_PREVIOUS_DEPTH,  1, &previous_depth->m_view);
-    }
+    ////Pixel Shader
+    //{
+    //    context->PSSetShader(shader->m_pixel_shader, NULL, 0);
+    //    context->PSSetSamplers(SLOT_PREVIOUS_TARGET_SAMPLER,1, &previous_target->m_sampler);
+    //    context->PSSetSamplers(SLOT_PREVIOUS_DEPTH_SAMPLER, 1, &previous_depth->m_sampler);
+    //    context->PSSetShaderResources(SLOT_PREVIOUS_TARGET, 1, &previous_target->m_view);
+    //    context->PSSetShaderResources(SLOT_PREVIOUS_DEPTH,  1, &previous_depth->m_view);
+    //}
 
-    //Compute shader
-    {
-        context->CSSetShader(nullptr, nullptr, 0);
-    }
+    ////Compute shader
+    //{
+    //    context->CSSetShader(nullptr, nullptr, 0);
+    //}
 
-    //Draw
-    {
-        context->Draw((UINT)vb->m_count, 0);
-    }
+    ////Draw
+    //{
+    //    context->Draw((UINT)vb->m_count, 0);
+    //}
 }
 
+
+void TempPopulateCommandQueue()
+{
+    // Command list allocators can only be reset when the associated 
+    // command lists have finished execution on the GPU; apps should use 
+    // fences to determine GPU execution progress.
+    HR(s_dx12.command_allocator->Reset());
+
+    // However, when ExecuteCommandList() is called on a particular command 
+    // list, that command list can then be reset at any time and must be before 
+    // re-recording.
+    HR(s_dx12.command_list->Reset(s_dx12.command_allocator, s_dx12.pipeline_state[+PipelineState::Cube_Full]));
+
+    // Set necessary state.
+    s_dx12.command_list->SetGraphicsRootSignature(s_dx12.root_signature);
+    s_dx12.command_list->RSSetViewports(1, &s_dx12.viewport);
+    D3D12_RECT scissor_rect = {};
+    s_dx12.command_list->RSSetScissorRects(1, &scissor_rect);
+
+    // Indicate that the back buffer will be used as a render target.
+    {
+        D3D12_RESOURCE_BARRIER barrier;
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = s_dx12.render_targets[s_dx12.frame_index];
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        s_dx12.command_list->ResourceBarrier(1, &barrier);
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc = s_dx12.rtv_heap->GetCPUDescriptorHandleForHeapStart();
+
+    //CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle;
+    rtv_handle.ptr = cpu_desc.ptr + s_dx12.frame_index * s_dx12.rtv_descriptor_size;
+    s_dx12.command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+
+    // Record commands.
+    const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+    s_dx12.command_list->ClearRenderTargetView(rtv_handle, clearColor, 0, nullptr);
+    s_dx12.command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    s_dx12.command_list->IASetVertexBuffers(0, 1, &s_dx12.vertex_buffer_view);
+    s_dx12.command_list->DrawInstanced(3, 1, 0, 0);
+
+    // Indicate that the back buffer will now be used to present.
+    {
+        D3D12_RESOURCE_BARRIER barrier;
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = s_dx12.render_targets[s_dx12.frame_index];
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        s_dx12.command_list->ResourceBarrier(1, &barrier);
+    }
+
+
+    HR(s_dx12.command_list->Close());
+}
 
 
 
@@ -2019,101 +2114,101 @@ void DrawFinal()
 // Primitives Render
 //**********************
 
-template<typename T>
-void DrawPrimitiveInternal(
-    std::vector<T>& verts_to_draw, 
-    ID3D11RasterizerState* rasterizer, 
-    Texture::Index texture_i,
-    Shader::Index shader_i,
-    GpuBuffer* vertex_buffer)
-{
-    if (verts_to_draw.size() == 0)
-        return;
-
-    ID3D11DeviceContext* context= s_dx11.device_context;
-    DX11Shader* shader      = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+shader_i]);
-    DX11Texture* texture    = reinterpret_cast<DX11Texture*>(g_renderer.textures[+texture_i]);
-    DX11GpuBuffer* vb       = reinterpret_cast<DX11GpuBuffer*>(vertex_buffer);
-    DX11Texture* depth      = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
-    DX11Texture* target     = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
-
-    {
-        ZoneScopedN("Upload");
-        vb->Upload(verts_to_draw);
-    }
-
-    //Bindings
-    {
-    }
-    //Input Assembler
-    {
-        context->IASetInputLayout(shader->m_vertex_input_layout);
-        UINT strides[] = { sizeof(T), };
-        UINT offsets[] = { 0, };
-        context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
-        context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    }
-
-    //Vertex Shader
-    {
-        context->VSSetShader(shader->m_vertex_shader, NULL, 0);
-    }
-    //Hull shader
-    {
-        context->HSSetShader(nullptr, nullptr, 0);
-    }
-    //Domain shader
-    {
-        context->DSSetShader(nullptr, nullptr, 0);
-    }
-    //Geometry shader
-    {
-        context->GSSetShader(nullptr, nullptr, 0);
-    }
-
-    //Rasterizer
-    {
-        context->RSSetState(rasterizer);
-        D3D11_VIEWPORT view_port = {
-            .TopLeftX = 0.0f,
-            .TopLeftY = 0.0f,
-            .Width = (float)s_dx11.swap_chain.size.x,
-            .Height = (float)s_dx11.swap_chain.size.y,
-            .MinDepth = 0.0f,
-            .MaxDepth = 1.0f,
-        };
-        context->RSSetViewports(1, &view_port);
-    }
-
-    //Pixel Shader
-    {
-        context->PSSetShader(shader->m_pixel_shader, NULL, 0);
-        context->PSSetSamplers(SLOT_PRIMITIVE_TEXTURE_SAMPLER,  1, &texture->m_sampler);
-        context->PSSetShaderResources(SLOT_PRIMITIVE_TEXTURE,   1, &texture->m_view);
-    }
-
-    //Output Merger
-    {
-        context->OMSetDepthStencilState(s_dx11.depth_stencil_state_depth, 1);
-        context->OMSetRenderTargets(1, &s_dx11.hdr_rtv, depth->m_depth_stencil_view);
-        context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
-    }
-
-    //Compute shader
-    {
-        context->CSSetShader(nullptr, nullptr, 0);
-    }
-
-    //Draw
-    {
-        const size_t indices_per_face = 6;
-        const size_t faces_per_cube = 6;
-        const UINT total_indices_to_draw = UINT(verts_to_draw.size() * indices_per_face * faces_per_cube);
-        //context->DrawIndexed(UINT((verts_to_draw.size() / 24) * 36), 0, 0);
-        context->Draw(UINT(verts_to_draw.size()), 0);
-    }
-    verts_to_draw.clear();
-}
+//template<typename T>
+//void DrawPrimitiveInternal(
+//    std::vector<T>& verts_to_draw, 
+//    ID3D11RasterizerState* rasterizer, 
+//    Texture::Index texture_i,
+//    Shader::Index shader_i,
+//    GpuBuffer* vertex_buffer)
+//{
+//    if (verts_to_draw.size() == 0)
+//        return;
+//
+//    ID3D11DeviceContext* context= s_dx11.device_context;
+//    DX11Shader* shader      = reinterpret_cast<DX11Shader*>(g_renderer.shaders[+shader_i]);
+//    DX11Texture* texture    = reinterpret_cast<DX11Texture*>(g_renderer.textures[+texture_i]);
+//    DX11GpuBuffer* vb       = reinterpret_cast<DX11GpuBuffer*>(vertex_buffer);
+//    DX11Texture* depth      = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_Depth]);
+//    DX11Texture* target     = reinterpret_cast<DX11Texture*>(g_renderer.textures[Texture::Index_Backbuffer_HDR]);
+//
+//    {
+//        ZoneScopedN("Upload");
+//        vb->Upload(verts_to_draw);
+//    }
+//
+//    //Bindings
+//    {
+//    }
+//    //Input Assembler
+//    {
+//        context->IASetInputLayout(shader->m_vertex_input_layout);
+//        UINT strides[] = { sizeof(T), };
+//        UINT offsets[] = { 0, };
+//        context->IASetVertexBuffers(0, 1, &vb->m_buffer, strides, offsets);
+//        context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+//    }
+//
+//    //Vertex Shader
+//    {
+//        context->VSSetShader(shader->m_vertex_shader, NULL, 0);
+//    }
+//    //Hull shader
+//    {
+//        context->HSSetShader(nullptr, nullptr, 0);
+//    }
+//    //Domain shader
+//    {
+//        context->DSSetShader(nullptr, nullptr, 0);
+//    }
+//    //Geometry shader
+//    {
+//        context->GSSetShader(nullptr, nullptr, 0);
+//    }
+//
+//    //Rasterizer
+//    {
+//        context->RSSetState(rasterizer);
+//        D3D11_VIEWPORT view_port = {
+//            .TopLeftX = 0.0f,
+//            .TopLeftY = 0.0f,
+//            .Width = (float)s_dx11.swap_chain.size.x,
+//            .Height = (float)s_dx11.swap_chain.size.y,
+//            .MinDepth = 0.0f,
+//            .MaxDepth = 1.0f,
+//        };
+//        context->RSSetViewports(1, &view_port);
+//    }
+//
+//    //Pixel Shader
+//    {
+//        context->PSSetShader(shader->m_pixel_shader, NULL, 0);
+//        context->PSSetSamplers(SLOT_PRIMITIVE_TEXTURE_SAMPLER,  1, &texture->m_sampler);
+//        context->PSSetShaderResources(SLOT_PRIMITIVE_TEXTURE,   1, &texture->m_view);
+//    }
+//
+//    //Output Merger
+//    {
+//        context->OMSetDepthStencilState(s_dx11.depth_stencil_state_depth, 1);
+//        context->OMSetRenderTargets(1, &s_dx11.hdr_rtv, depth->m_depth_stencil_view);
+//        context->OMSetBlendState(s_dx11.blend_state, NULL, 0xffffffff);
+//    }
+//
+//    //Compute shader
+//    {
+//        context->CSSetShader(nullptr, nullptr, 0);
+//    }
+//
+//    //Draw
+//    {
+//        const size_t indices_per_face = 6;
+//        const size_t faces_per_cube = 6;
+//        const UINT total_indices_to_draw = UINT(verts_to_draw.size() * indices_per_face * faces_per_cube);
+//        //context->DrawIndexed(UINT((verts_to_draw.size() / 24) * 36), 0, 0);
+//        context->Draw(UINT(verts_to_draw.size()), 0);
+//    }
+//    verts_to_draw.clear();
+//}
 
 
 
@@ -2232,13 +2327,13 @@ void AddTetrahedronToRender(const Vec3 p, const Vec3 dir, Color color, Vec3  sca
 void DrawPrimitives()
 {
     ZoneScopedN("Render Primitives");
-    g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
-    DrawPrimitiveInternal(s_tetrasToDraw_opaque,      s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
-    DrawPrimitiveInternal(s_cubesToDraw_opaque,       s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
-    DrawPrimitiveInternal(s_tetrasToDraw_transparent, s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
-    DrawPrimitiveInternal(s_cubesToDraw_transparent,  s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
-    DrawPrimitiveInternal(s_tetrasToDraw_wireframe,   s_dx12.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
-    DrawPrimitiveInternal(s_cubesToDraw_wireframe,    s_dx12.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    //g_renderer.cb_common->Bind(SLOT_CB_COMMON, GpuBuffer::BindLocation::All);
+    //DrawPrimitiveInternal(s_tetrasToDraw_opaque,      s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    //DrawPrimitiveInternal(s_cubesToDraw_opaque,       s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    //DrawPrimitiveInternal(s_tetrasToDraw_transparent, s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    //DrawPrimitiveInternal(s_cubesToDraw_transparent,  s_dx12.rasterizer_full,     Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
+    //DrawPrimitiveInternal(s_tetrasToDraw_wireframe,   s_dx12.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Tetra,   g_renderer.tetra_vb);
+    //DrawPrimitiveInternal(s_cubesToDraw_wireframe,    s_dx12.rasterizer_wireframe,Texture::Index_Plain, Shader::Index_Cube,    g_renderer.cube_vb);
 }
 
 const SDL_MessageBoxColorScheme colorScheme = {

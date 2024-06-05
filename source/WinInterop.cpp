@@ -115,26 +115,26 @@ void ConvertWideCharToMultiByte(std::string& out, const std::wstring& in)
 
     i32 multibyte_char_count = WideCharToMultiByte(
         CP_UTF8,                //[in]            UINT                               CodePage,
-        MB_ERR_INVALID_CHARS,   //[in]            DWORD                              dwFlags,
+        0,//MB_ERR_INVALID_CHARS,   //[in]            DWORD                              dwFlags,
         in.c_str(),             //[in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
         -1,                     //[in]            int                                cchWideChar,
         nullptr,                //[out, optional] LPSTR                              lpMultiByteStr,
         0,                      //[in]            int                                cbMultiByte,
         "#",                    //[in, optional]  LPCCH                              lpDefaultChar,
-        LPBOOL(&invalid_string) //[out, optional] LPBOOL                             lpUsedDefaultChar
+        &invalid_string         //[out, optional] LPBOOL                             lpUsedDefaultChar
     );
     assert(multibyte_char_count > 0);
     out.clear();
     out.resize(multibyte_char_count);
     i32 multibyte_char_actual = WideCharToMultiByte(
         CP_UTF8,                //[in]            UINT                               CodePage,
-        MB_ERR_INVALID_CHARS,   //[in]            DWORD                              dwFlags,
+        0,//MB_ERR_INVALID_CHARS,   //[in]            DWORD                              dwFlags,
         in.c_str(),             //[in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
         -1,                     //[in]            int                                cchWideChar,
         out.data(),             //[out, optional] LPSTR                              lpMultiByteStr,
-        out.size(),             //[in]            int                                cbMultiByte,
+        (i32)out.size(),        //[in]            int                                cbMultiByte,
         "#",                    //[in, optional]  LPCCH                              lpDefaultChar,
-        LPBOOL(&invalid_string) //[out, optional] LPBOOL                             lpUsedDefaultChar
+        &invalid_string         //[out, optional] LPBOOL                             lpUsedDefaultChar
     );
     assert(multibyte_char_actual > 0);
     assert(multibyte_char_actual == multibyte_char_count);

@@ -19,6 +19,7 @@ project "V3"
         "d3d11.lib",
         "dxgi.lib",
         "dxguid.lib",
+        "d3d12.lib",
     }
 
     libdirs {
@@ -32,7 +33,7 @@ project "V3"
         "contrib/ImGui",
         "contrib/SDL2/include",
         "contrib/tracy-master/public/tracy",
-        "contrib/DirectX-Headers/**"
+        --"contrib/DirectX-Headers/**"
         --"contrib/GLEW/include",
         --"contrib/GLEW/include/GL",
     }

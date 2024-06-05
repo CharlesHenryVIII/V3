@@ -6,6 +6,8 @@
 #include "Vox.h"
 #include "GpuSharedData.h"
 
+#include "dxgiformat.h"
+
 #include <unordered_map>
 
 #define MAX_MIPS 10
@@ -172,6 +174,7 @@ struct Shader
         Index_Cube,
         Index_Tetra,
         Index_Final_Draw,
+        Index_Hello_Triangle,
         Index_Count,
     };
     ENUMOPS(Index);
@@ -294,41 +297,41 @@ public:
 #endif
 
 
-void InitializeData(const Vec2I backbuffer_size)
+inline void InitializeData(const Vec2I backbuffer_size)
 {
     //
     //Create Textures:
     //
 
-    CreateTexture(&g_renderer.textures[Texture::Index_Minecraft], "assets/MinecraftSpriteSheet20120215Modified.png", Texture::Format_R8G8B8A8_UNORM_SRGB, Texture::Filter_Point);
-    u8 pixel_texture_data[] = { 255, 255, 255, 255 };
-    CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1, 0 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
-    CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
+    //CreateTexture(&g_renderer.textures[Texture::Index_Minecraft], "assets/MinecraftSpriteSheet20120215Modified.png", Texture::Format_R8G8B8A8_UNORM_SRGB, Texture::Filter_Point);
+    //u8 pixel_texture_data[] = { 255, 255, 255, 255 };
+    //CreateTexture(&g_renderer.textures[Texture::Index_Plain], pixel_texture_data, { 1, 1, 0 }, Texture::Format_R8G8B8A8_UNORM, sizeof(pixel_texture_data[0]));
+    //CreateTexture(&g_renderer.textures[Texture::Index_Random], "assets/random-dcode.png", Texture::Format_R8G8B8A8_UNORM, Texture::Filter_Point);
 
-    {
-        Texture::TextureParams tp = {
-            .size = ToVec3I(backbuffer_size, 0),
-            .format = Texture::Format_D32_FLOAT,
-            .mode = Texture::Address_Invalid,
-            .filter = Texture::Filter_Invalid,
-            .type = Texture::Type_Depth,
-            .render_target = true,
-            .bytes_per_pixel = 0,
-        };
-        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_Depth], tp, nullptr);
-    }
-    {
-        Texture::TextureParams tp = {
-            .size   = ToVec3I(backbuffer_size, 0),
-            .format = Texture::Format_R11G11B10_FLOAT,
-            .mode   = Texture::Address_Clamp,
-            .filter = Texture::Filter_Aniso,
-            .type   = Texture::Type_Texture,
-            .render_target = true,
-            .bytes_per_pixel = 4,
-        };
-        CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_HDR], tp, nullptr);
-    }
+    //{
+    //    Texture::TextureParams tp = {
+    //        .size = ToVec3I(backbuffer_size, 0),
+    //        .format = Texture::Format_D32_FLOAT,
+    //        .mode = Texture::Address_Invalid,
+    //        .filter = Texture::Filter_Invalid,
+    //        .type = Texture::Type_Depth,
+    //        .render_target = true,
+    //        .bytes_per_pixel = 0,
+    //    };
+    //    CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_Depth], tp, nullptr);
+    //}
+    //{
+    //    Texture::TextureParams tp = {
+    //        .size   = ToVec3I(backbuffer_size, 0),
+    //        .format = Texture::Format_R11G11B10_FLOAT,
+    //        .mode   = Texture::Address_Clamp,
+    //        .filter = Texture::Filter_Aniso,
+    //        .type   = Texture::Type_Texture,
+    //        .render_target = true,
+    //        .bytes_per_pixel = 4,
+    //    };
+    //    CreateTexture(&g_renderer.textures[Texture::Index_Backbuffer_HDR], tp, nullptr);
+    //}
 
 
     //
@@ -351,28 +354,33 @@ void InitializeData(const Vec2I backbuffer_size)
     //    g_renderer.shaders[+Shader::Voxel_Rast] = new Shader("Source/Shaders/Voxel_Rast.vert", "Source/Shaders/Voxel_Rast.frag", layout, arrsize(layout));
     //}
     {
-        //D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 } };
-        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Voxel],   "Source/Shaders/Voxel.hlsl",    layout, arrsize(layout)));
+        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 },
+                                              { "COLOR",    DXGI_FORMAT_R32G32_FLOAT, 12 },  };
+        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Hello_Triangle],   "source/shaders/HelloTriangle.hlsl",    layout, arrsize(layout)));
     }
-    {
-        Shader::InputElementDesc layout[] = {
-            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Cube, color)    },
-            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Cube, p)        },
-            { "TEXCOORD",   DXGI_FORMAT_R32G32_FLOAT,       offsetof(Vertex_Cube, uv)       } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
-    }
-    {
-        Shader::InputElementDesc layout[] = {
-            { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Tetra, color)    },
-            { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, p)        },
-            { "NORMAL",     DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, n)        } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Tetra],    "Source/Shaders/Tetra.hlsl",   layout, arrsize(layout)));
-    }
-    {
-        Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
-        VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
-    }
+    //{
+    //    //D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 } };
+    //    Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
+    //    VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Voxel],   "Source/Shaders/Voxel.hlsl",    layout, arrsize(layout)));
+    //}
+    //{
+    //    Shader::InputElementDesc layout[] = {
+    //        { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Cube, color)    },
+    //        { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Cube, p)        },
+    //        { "TEXCOORD",   DXGI_FORMAT_R32G32_FLOAT,       offsetof(Vertex_Cube, uv)       } };
+    //    VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Cube],    "Source/Shaders/Cube.hlsl",     layout, arrsize(layout)));
+    //}
+    //{
+    //    Shader::InputElementDesc layout[] = {
+    //        { "COLOR",      DXGI_FORMAT_R32G32B32A32_FLOAT, offsetof(Vertex_Tetra, color)    },
+    //        { "POSITION",   DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, p)        },
+    //        { "NORMAL",     DXGI_FORMAT_R32G32B32_FLOAT,    offsetof(Vertex_Tetra, n)        } };
+    //    VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Tetra],    "Source/Shaders/Tetra.hlsl",   layout, arrsize(layout)));
+    //}
+    //{
+    //    Shader::InputElementDesc layout[] = { { "POSITION", DXGI_FORMAT_R32G32_FLOAT, 0 } };
+    //    VERIFY(CreateShader(&g_renderer.shaders[+Shader::Index_Final_Draw],   "Source/Shaders/Final_Draw.hlsl",  layout, arrsize(layout)));
+    //}
     //{
     //    D3D11_INPUT_ELEMENT_DESC layout[] = {
     //        { "POSITION",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(Vertex_Cube, p),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -490,3 +498,5 @@ void InitializeData(const Vec2I backbuffer_size)
     }
     CreateGpuBuffer(&g_renderer.cb_common, "common_cb", true, GpuBuffer::Type::Constant);
 }
+
+void TempPopulateCommandQueue();

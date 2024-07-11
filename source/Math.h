@@ -141,6 +141,12 @@ struct Vertex_Tetra {
     Vec3 p;
     Vec3 n;
 };
+
+struct Vertex_Triangle
+{
+    Vec3 position;
+    Vec4 color;
+};
 #pragma pack(pop)
 
 struct RectInt {

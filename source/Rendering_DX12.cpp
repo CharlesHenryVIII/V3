@@ -1241,13 +1241,12 @@ void InitializeVideo()
 
 
     //Create the command queue.
-    ID3D12CommandQueue* command_queue;
     {
         D3D12_COMMAND_QUEUE_DESC desc = {};
         desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
         desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-        HR(s_dx12.device->CreateCommandQueue(&desc, IID_PPV_ARGS(&command_queue)));
+        HR(s_dx12.device->CreateCommandQueue(&desc, IID_PPV_ARGS(&s_dx12.command_queue)));
     }
 
 
@@ -1297,7 +1296,7 @@ void InitializeVideo()
         //    &s_dx12.swap_chain.handle));
         IDXGISwapChain* swap_chain1;
         HR(s_dx12.factory->CreateSwapChain(
-            command_queue,        // Swap chain needs the queue so that it can force a flush on it.
+            s_dx12.command_queue,        // Swap chain needs the queue so that it can force a flush on it.
             &swap_chain_desc,
             &swap_chain1));
         //TODO: Add error checking for failing to get IDXGISwapChain3
@@ -1431,7 +1430,7 @@ void InitializeVideo()
         psoDesc.PS = { reinterpret_cast<UINT8*>(shader->m_pixel_blob->GetBufferPointer()),  shader->m_pixel_blob->GetBufferSize()   };
         psoDesc.RasterizerState = rasterizer_full;
         psoDesc.BlendState = blend_desc;
-        psoDesc.DepthStencilState.DepthEnable = TRUE;
+        psoDesc.DepthStencilState.DepthEnable = FALSE;
         psoDesc.DepthStencilState.StencilEnable = FALSE;
         psoDesc.SampleMask = UINT_MAX;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -1450,12 +1449,13 @@ void InitializeVideo()
 
     // Create the vertex buffer.
     {
+        float aspect_ratio = float(g_renderer.size.x) / g_renderer.size.y;
         // Define the geometry for a triangle.
-        Vertex triangleVertices[] =
+        Vertex_Triangle triangleVertices[] =
         {
-            { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-            { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-            { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+            { { 0.0f, 0.25f * aspect_ratio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+            { { 0.25f, -0.25f * aspect_ratio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+            { { -0.25f, -0.25f * aspect_ratio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
         };
 
         const UINT vertexBufferSize = sizeof(triangleVertices);
@@ -1464,27 +1464,55 @@ void InitializeVideo()
         // recommended. Every time the GPU needs it, the upload heap will be marshalled 
         // over. Please read up on Default Heap usage. An upload heap is used here for 
         // code simplicity and because there are very few verts to actually transfer.
-        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
-        auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-        ThrowIfFailed(m_device->CreateCommittedResource(
-            &heapProps,
+        GpuBuffer* vertex_buffer = nullptr;
+        CreateGpuBuffer(&vertex_buffer, "Triangle Vertex Buffer", true, GpuBuffer::Type::Vertex);
+        DX12GpuBuffer* vertex_gpu_buffer = (DX12GpuBuffer*)vertex_buffer;
+
+        D3D12_HEAP_PROPERTIES props = {
+            .Type = D3D12_HEAP_TYPE_UPLOAD,
+            .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+            .CreationNodeMask = 1,
+            .VisibleNodeMask = 1,
+        };
+
+        DXGI_SAMPLE_DESC sample_desc = { 1, 0 };
+
+        D3D12_RESOURCE_DESC desc = {
+            .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+            .Alignment = 0,
+            .Width = vertexBufferSize,
+            .Height = 1,
+            .DepthOrArraySize = 1,
+            .MipLevels = 1,
+            .Format = DXGI_FORMAT_UNKNOWN,
+            .SampleDesc = sample_desc,
+            .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            .Flags = D3D12_RESOURCE_FLAG_NONE,
+        };
+
+        HR(s_dx12.device->CreateCommittedResource(
+            &props,
             D3D12_HEAP_FLAG_NONE,
             &desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-            IID_PPV_ARGS(&m_vertexBuffer)));
+            IID_PPV_ARGS(&vertex_gpu_buffer->m_buffer)));
 
         // Copy the triangle data to the vertex buffer.
         UINT8* pVertexDataBegin;
-        CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-        ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+        D3D12_RANGE read_range = {// We do not intend to read from this resource on the CPU.
+            .Begin = 0,
+            .End = 0,
+        };
+        HR(vertex_gpu_buffer->m_buffer->Map(0, &read_range, reinterpret_cast<void**>(&pVertexDataBegin)));
         memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
-        m_vertexBuffer->Unmap(0, nullptr);
+        vertex_gpu_buffer->m_buffer->Unmap(0, nullptr);
 
         // Initialize the vertex buffer view.
-        m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-        m_vertexBufferView.StrideInBytes = sizeof(Vertex);
-        m_vertexBufferView.SizeInBytes = vertexBufferSize;
+        s_dx12.vertex_buffer_view.BufferLocation = vertex_gpu_buffer->m_buffer->GetGPUVirtualAddress();
+        s_dx12.vertex_buffer_view.StrideInBytes = sizeof(Vertex);
+        s_dx12.vertex_buffer_view.SizeInBytes   = vertexBufferSize;
     }
 
 
@@ -2405,4 +2433,38 @@ i32 CreateMessageWindow(SDL_MessageBoxButtonData* buttons, i32 numOfButtons, Mes
     }
     return buttonID;
 }
+
+void RenderImgui(bool showImgui)
+{
+    ZoneScopedN("ImGui Render");
+    if (showImgui)
+    {
+        ImGui::Render();
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), s_dx12.command_list);
+    }
+}
+
+void ShutdownImgui()
+{
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void GetImguiSDLEvent(const SDL_Event* event)
+{
+    ImGui_ImplSDL2_ProcessEvent(event);
+}
+
+void StartImgui()
+{
+    // Start the Dear ImGui frame
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplSDL2_NewFrame(g_renderer.SDL_Context);
+    ImGui::NewFrame();
+}
+
+
+
+
 #endif

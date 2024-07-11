@@ -500,3 +500,8 @@ inline void InitializeData(const Vec2I backbuffer_size)
 }
 
 void TempPopulateCommandQueue();
+
+void StartImgui();
+void RenderImgui(bool showImgui);
+void ShutdownImgui();
+void GetImguiSDLEvent(const SDL_Event* event);

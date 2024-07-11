@@ -3,8 +3,6 @@
 #include <SDL.h>
 
 #include "imgui.h"
-#include "ImGui/backends/imgui_impl_sdl2.h"
-#include "ImGui/backends/imgui_impl_dx11.h"
 #include "Tracy.hpp"
 #include "stb/stb_image.h"
 
@@ -186,7 +184,8 @@ int main(int argc, char* argv[])
                 ZoneScopedN("Poll Events");
                 while (SDL_PollEvent(&SDLEvent))
                 {
-                    ImGui_ImplSDL2_ProcessEvent(&SDLEvent);
+
+                    GetImguiSDLEvent(&SDLEvent);
 
                     switch (SDLEvent.type)
                     {
@@ -457,10 +456,7 @@ int main(int argc, char* argv[])
                 ZoneScopedN("ImGui Update");
                 float transformInformationWidth = 0.0f;
                 {
-                    // Start the Dear ImGui frame
-                    ImGui_ImplDX11_NewFrame();
-                    ImGui_ImplSDL2_NewFrame(g_renderer.SDL_Context);
-                    ImGui::NewFrame();
+                    StartImgui();
 
                     const float PAD = 5.0f;
                     ImGuiIO& io = ImGui::GetIO();
@@ -573,14 +569,7 @@ int main(int argc, char* argv[])
             //    DrawFinal();
             //}
 
-            {
-                ZoneScopedN("ImGui Render");
-                if (showIMGUI)
-                {
-                    ImGui::Render();
-                    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-                }
-            }
+            RenderImgui(showIMGUI);
         }
         {
             ZoneScopedN("Frame End");
@@ -588,12 +577,10 @@ int main(int argc, char* argv[])
         }
         FrameMark;
     }
-    // Cleanup
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
 
-    //SDL_GL_DeleteContext(g_renderer.GL_Context);
+    ShutdownImgui();
+    // Cleanup
+
     SDL_DestroyWindow(g_renderer.SDL_Context);
     SDL_Quit();
     return 0;
